@@ -1,0 +1,25 @@
+# macOS
+.DS_Store
+
+# Xcode user data
+xcuserdata/
+*.xcuserstate
+
+# Xcode workspace and build outputs
+DerivedData/
+.build/
+build/
+
+# Project-local generated build directories
+build-debug/
+build-release/
+build-signed/
+build-signed-release/
+
+# Swift Package Manager
+.swiftpm/
+Package.resolved
+
+# Generated artifacts
+artifacts/
+dist/
