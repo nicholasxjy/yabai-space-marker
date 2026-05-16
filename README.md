@@ -2,7 +2,7 @@
 
 `yabai-space-marker` is a macOS floating side panel built with SwiftUI and AppKit. It shows your current `yabai` spaces and lets you jump to any space with one click.
 
-The current UI uses a compact liquid-glass style with expand/collapse behavior, focused-space emphasis, and spring-based transitions.
+The current UI uses a compact liquid-glass style with expand/collapse behavior, focused-space emphasis, spring-based transitions, and automatic light/dark mode support.
 
 ## Features
 
@@ -12,6 +12,14 @@ The current UI uses a compact liquid-glass style with expand/collapse behavior, 
 - Click any space to focus it immediately
 - Expands on space changes, then auto-collapses
 - Compact liquid-glass UI
+- Automatically adapts to macOS light and dark appearance
+- Adaptive refresh scheduling to reduce idle CPU usage while keeping interactions responsive
+- Hover-aware interactive refresh: high-frequency polling is only used while the panel is expanded or actively hovered
+- Command timeout protection for `yabai` queries/focus calls to avoid stuck subprocesses consuming resources
+- Silent background refreshes to avoid unnecessary loading-state redraws during steady-state polling
+- Refresh loop pauses automatically while displays are asleep and resumes on wake
+- `yabai` subprocess timeout waiting uses event-driven completion instead of a spin/sleep polling loop
+- Coalesced window/layout updates for smoother animations and less redundant work
 - Right-click menu with Refresh and Quit actions
 - Footer controls for Refresh and Quit
 
@@ -22,7 +30,9 @@ The app does not manage spaces directly. It shells out to the `yabai` CLI:
 - Query spaces: `yabai -m query --spaces`
 - Focus a space: `yabai -m space --focus <index>`
 
-The app refreshes space state on a timer and temporarily expands the panel in these cases:
+The app refreshes space state with adaptive scheduling instead of a constant high-frequency polling loop. It only uses high-frequency refresh while the panel is expanded or the pointer is actively hovering over it, and it adds timeout protection around `yabai` subprocesses so hung commands do not keep consuming resources.
+
+The panel temporarily expands in these cases:
 
 - On startup
 - On manual refresh
@@ -107,6 +117,15 @@ build-signed/Build/Products/Debug/yabai-space-marker.app
   - App entry point
   - `NSPanel` creation and layout
   - Panel positioning and resizing when the screen or active space changes
+
+## Appearance
+
+The panel automatically follows the current macOS appearance.
+
+- **Light mode**: bright frosted-glass surface with subtle blue accents
+- **Dark mode**: darker glass treatment with elevated contrast, softer borders, and tuned glow/shadow balance
+
+No separate toggle is required — changing the system appearance updates the panel theme automatically.
 
 ## UI model
 

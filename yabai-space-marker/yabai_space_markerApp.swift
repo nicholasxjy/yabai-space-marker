@@ -77,9 +77,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func bindWindowLayout() {
         monitor.$panelPresentation
-            .combineLatest(monitor.$spaces, monitor.$errorMessage, monitor.$isLoading)
+            .combineLatest(monitor.$spaces, monitor.$errorMessage)
+            .map { [weak self] _, _, _ in
+                self?.panelSize() ?? .zero
+            }
+            .removeDuplicates()
             .receive(on: RunLoop.main)
-            .sink { [weak self] _, _, _, _ in
+            .sink { [weak self] _ in
                 self?.updateWindowFrame(animated: true)
             }
             .store(in: &cancellables)
@@ -109,6 +113,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.monitor.refresh(trigger: .spaceChange)
             }
         }))
+
+        observers.append((workspaceCenter, workspaceCenter.addObserver(
+            forName: NSWorkspace.screensDidSleepNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.monitor.suspendRefreshing()
+            }
+        }))
+
+        observers.append((workspaceCenter, workspaceCenter.addObserver(
+            forName: NSWorkspace.screensDidWakeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.monitor.resumeRefreshing()
+            }
+        }))
     }
 
     private func updateWindowFrame(animated: Bool) {
@@ -121,6 +145,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let x = visibleFrame.minX + FloatingPanelMetrics.horizontalInset
         let y = visibleFrame.midY - (size.height / 2)
         let frame = NSRect(x: x, y: y, width: size.width, height: size.height)
+
+        if window.frame.integral == frame.integral {
+            return
+        }
 
         guard animated else {
             window.setFrame(frame, display: true)

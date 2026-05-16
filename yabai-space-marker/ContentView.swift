@@ -32,6 +32,17 @@ enum FloatingPanelMetrics {
 
     static let autoCollapseDelay: TimeInterval = 2.6
     static let frameAnimationDuration: TimeInterval = 0.36
+    static let refreshIntervalInteractive: TimeInterval = 2.0
+    static let refreshIntervalCollapsedIdle: TimeInterval = 10.0
+    static let refreshIntervalLoading: TimeInterval = 1.25
+    static let refreshIntervalError: TimeInterval = 8.0
+    static let refreshTimerToleranceRatio: Double = 0.25
+    static let focusRefreshDelay: TimeInterval = 0.18
+    static let hoverRefreshStalenessThreshold: TimeInterval = 1.2
+    static let eventRefreshDebounce: TimeInterval = 0.35
+    static let queryCommandTimeout: TimeInterval = 1.0
+    static let focusCommandTimeout: TimeInterval = 1.5
+    static let processTerminationGracePeriod: TimeInterval = 0.12
     static let panelAnimation = Animation.interactiveSpring(response: 0.38, dampingFraction: 0.74, blendDuration: 0.16)
     static let contentAnimation = Animation.interactiveSpring(response: 0.28, dampingFraction: 0.78, blendDuration: 0.1)
     static let fadeAnimation = Animation.easeInOut(duration: 0.18)
@@ -43,7 +54,12 @@ enum FloatingPanelPresentation: Equatable {
 }
 
 struct ContentView: View {
+    @Environment(\.colorScheme) private var colorScheme
     @ObservedObject var monitor: YabaiSpacesMonitor
+
+    private var theme: FloatingTheme {
+        .resolve(for: colorScheme)
+    }
 
     private var isExpanded: Bool {
         monitor.effectivePresentation == .expanded
@@ -130,9 +146,9 @@ struct ContentView: View {
         .background(panelBackground)
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .onHover { monitor.setPointerInside($0) }
         .animation(FloatingPanelMetrics.panelAnimation, value: isExpanded)
         .animation(FloatingPanelMetrics.contentAnimation, value: monitor.focusedSpace?.id)
-        .animation(FloatingPanelMetrics.contentAnimation, value: monitor.isLoading)
         .contextMenu {
             Button("Refresh") {
                 monitor.refresh(trigger: .manual)
@@ -156,10 +172,11 @@ struct ContentView: View {
                         title: "Yabai unavailable",
                         message: errorMessage,
                         systemImage: "exclamationmark.triangle.fill",
-                        accent: FloatingPalette.errorAccent,
-                        textColor: FloatingPalette.errorText,
-                        backgroundColor: FloatingPalette.errorBackground,
-                        tint: FloatingPalette.errorAccent
+                        accent: theme.errorAccent,
+                        textColor: theme.errorText,
+                        backgroundColor: theme.errorBackground,
+                        tint: theme.errorAccent,
+                        theme: theme
                     )
                     .help(errorMessage)
                 } else if monitor.spaces.isEmpty {
@@ -169,10 +186,11 @@ struct ContentView: View {
                             ? "The marker is checking yabai for the latest workspace state."
                             : "Create or expose spaces in yabai and they will appear here.",
                         systemImage: monitor.isLoading ? "arrow.triangle.2.circlepath" : "rectangle.3.group.fill",
-                        accent: FloatingPalette.accentStart,
-                        textColor: FloatingPalette.primaryText,
-                        backgroundColor: FloatingPalette.surfaceWash,
-                        tint: FloatingPalette.accentGlow
+                        accent: theme.accentStart,
+                        textColor: theme.primaryText,
+                        backgroundColor: theme.surfaceWash,
+                        tint: theme.accentGlow,
+                        theme: theme
                     )
                 } else {
                     VStack(spacing: FloatingPanelMetrics.itemSpacing) {
@@ -180,7 +198,8 @@ struct ContentView: View {
                             Button {
                                 monitor.focus(space: space)
                             } label: {
-                                SpaceRow(space: space)
+                                SpaceRow(space: space, theme: theme)
+                                    .equatable()
                             }
                             .buttonStyle(.plain)
                             .help(space.title)
@@ -198,15 +217,15 @@ struct ContentView: View {
     private var collapsedPanel: some View {
         VStack(spacing: FloatingPanelMetrics.collapsedSpacing) {
             HStack(spacing: 6) {
-                BrandBadge(size: 24)
+                BrandBadge(size: 24, theme: theme)
 
                 Spacer(minLength: 0)
 
                 Circle()
-                    .fill(monitor.errorMessage == nil ? FloatingPalette.accentStart : FloatingPalette.errorAccent)
+                    .fill(monitor.errorMessage == nil ? theme.accentStart : theme.errorAccent)
                     .frame(width: 6, height: 6)
                     .shadow(
-                        color: (monitor.errorMessage == nil ? FloatingPalette.accentStart : FloatingPalette.errorAccent).opacity(0.4),
+                        color: (monitor.errorMessage == nil ? theme.accentStart : theme.errorAccent).opacity(theme.statusDotGlowOpacity),
                         radius: 5,
                         x: 0,
                         y: 1
@@ -231,38 +250,39 @@ struct ContentView: View {
                     Text("\(focusedSpace.index)")
                         .font(.system(size: 21, weight: .bold, design: .rounded))
                         .monospacedDigit()
-                        .foregroundStyle(FloatingPalette.primaryText)
+                        .foregroundStyle(theme.primaryText)
 
                     Text(compactCardTitle(for: focusedSpace))
                         .font(.system(size: 9, weight: .semibold, design: .rounded))
-                        .foregroundStyle(FloatingPalette.secondaryText)
+                        .foregroundStyle(theme.secondaryText)
                         .lineLimit(1)
                 } else if monitor.isLoading {
                     Image(systemName: "arrow.triangle.2.circlepath")
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(FloatingPalette.primaryText)
+                        .foregroundStyle(theme.primaryText)
 
                     Text("Sync")
                         .font(.system(size: 9, weight: .semibold, design: .rounded))
-                        .foregroundStyle(FloatingPalette.secondaryText)
+                        .foregroundStyle(theme.secondaryText)
                 } else {
                     Image(systemName: "rectangle.3.group.fill")
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(FloatingPalette.primaryText)
+                        .foregroundStyle(theme.primaryText)
 
                     Text("Spaces")
                         .font(.system(size: 9, weight: .semibold, design: .rounded))
-                        .foregroundStyle(FloatingPalette.secondaryText)
+                        .foregroundStyle(theme.secondaryText)
                 }
             }
             .frame(maxWidth: .infinity, minHeight: FloatingPanelMetrics.compactCardHeight)
             .background(
                 LiquidGlassSurface(
                     cornerRadius: 18,
-                    tint: focusedSpace == nil ? FloatingPalette.neutralTone : FloatingPalette.focusGlow,
+                    tint: focusedSpace == nil ? theme.neutralTone : theme.focusGlow,
                     tintStrength: focusedSpace == nil ? 0.09 : 0.18,
                     fillOpacity: focusedSpace == nil ? 0.18 : 0.24,
-                    highlightOpacity: focusedSpace == nil ? 0.7 : 0.82
+                    highlightOpacity: focusedSpace == nil ? 0.7 : 0.82,
+                    theme: theme
                 )
             )
         }
@@ -277,16 +297,16 @@ struct ContentView: View {
 
     private var expandedHeader: some View {
         HStack(spacing: 10) {
-            BrandBadge(size: 30)
+            BrandBadge(size: 30, theme: theme)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text("Space Marker")
                     .font(.system(size: 14, weight: .semibold, design: .rounded))
-                    .foregroundStyle(FloatingPalette.primaryText)
+                    .foregroundStyle(theme.primaryText)
 
                 Text(summaryText)
                     .font(.system(size: 10, weight: .medium, design: .rounded))
-                    .foregroundStyle(FloatingPalette.secondaryText)
+                    .foregroundStyle(theme.secondaryText)
                     .lineLimit(2)
             }
 
@@ -294,16 +314,17 @@ struct ContentView: View {
 
             Text(statusBadgeText)
                 .font(.system(size: 9, weight: .bold, design: .rounded))
-                .foregroundStyle(monitor.errorMessage == nil ? FloatingPalette.primaryText : FloatingPalette.errorText)
+                .foregroundStyle(monitor.errorMessage == nil ? theme.primaryText : theme.errorText)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 5)
                 .background(
                     LiquidGlassSurface(
                         cornerRadius: 11,
-                        tint: monitor.errorMessage == nil ? FloatingPalette.neutralTone : FloatingPalette.errorAccent,
+                        tint: monitor.errorMessage == nil ? theme.neutralTone : theme.errorAccent,
                         tintStrength: monitor.errorMessage == nil ? 0.08 : 0.15,
                         fillOpacity: 0.18,
-                        highlightOpacity: 0.6
+                        highlightOpacity: 0.6,
+                        theme: theme
                     )
                 )
         }
@@ -319,7 +340,7 @@ struct ContentView: View {
                 Image(systemName: monitor.errorMessage == nil ? "sparkles" : "wrench.and.screwdriver.fill")
             }
             .font(.system(size: 10, weight: .medium, design: .rounded))
-            .foregroundStyle(FloatingPalette.tertiaryText)
+            .foregroundStyle(theme.tertiaryText)
 
             Spacer(minLength: 6)
 
@@ -336,8 +357,9 @@ struct ContentView: View {
             } label: {
                 FooterControlButton(
                     systemImage: monitor.isLoading ? "arrow.triangle.2.circlepath.circle.fill" : "arrow.clockwise.circle.fill",
-                    foreground: FloatingPalette.primaryText,
-                    backgroundTint: FloatingPalette.neutralTone
+                    foreground: theme.primaryText,
+                    backgroundTint: theme.neutralTone,
+                    theme: theme
                 )
             }
             .buttonStyle(.plain)
@@ -348,8 +370,9 @@ struct ContentView: View {
             } label: {
                 FooterControlButton(
                     systemImage: "power.circle.fill",
-                    foreground: FloatingPalette.errorText,
-                    backgroundTint: FloatingPalette.errorAccent
+                    foreground: theme.errorText,
+                    backgroundTint: theme.errorAccent,
+                    theme: theme
                 )
             }
             .buttonStyle(.plain)
@@ -360,13 +383,14 @@ struct ContentView: View {
     private var panelBackground: some View {
         LiquidGlassSurface(
             cornerRadius: 24,
-            tint: isExpanded ? FloatingPalette.neutralTone : FloatingPalette.neutralTint,
+            tint: isExpanded ? theme.neutralTone : theme.neutralTint,
             tintStrength: isExpanded ? 0.1 : 0.08,
             fillOpacity: isExpanded ? 0.18 : 0.22,
-            highlightOpacity: isExpanded ? 0.84 : 0.76
+            highlightOpacity: isExpanded ? 0.84 : 0.76,
+            theme: theme
         )
-        .shadow(color: Color.black.opacity(isExpanded ? 0.09 : 0.05), radius: isExpanded ? 18 : 12, x: 0, y: isExpanded ? 12 : 8)
-        .shadow(color: FloatingPalette.focusGlow.opacity(isExpanded ? 0.1 : 0.05), radius: isExpanded ? 12 : 7, x: 0, y: 5)
+        .shadow(color: theme.panelShadow.opacity(isExpanded ? theme.expandedShadowOpacity : theme.collapsedShadowOpacity), radius: isExpanded ? 18 : 12, x: 0, y: isExpanded ? 12 : 8)
+        .shadow(color: theme.focusGlow.opacity(isExpanded ? theme.expandedGlowOpacity : theme.collapsedGlowOpacity), radius: isExpanded ? 12 : 7, x: 0, y: 5)
     }
 }
 
@@ -386,31 +410,114 @@ private struct JellyMorphModifier: ViewModifier {
     }
 }
 
-private enum FloatingPalette {
-    static let accentStart = Color(red: 0.38, green: 0.70, blue: 1.00)
-    static let accentEnd = Color(red: 0.54, green: 0.57, blue: 1.00)
-    static let accentGlow = Color(red: 0.76, green: 0.90, blue: 1.00)
+private struct FloatingTheme: Equatable {
+    let id: Int
+    let accentStart: Color
+    let accentEnd: Color
+    let accentGlow: Color
 
-    static let neutralTint = Color(red: 0.88, green: 0.92, blue: 0.98)
-    static let neutralTone = Color(red: 0.72, green: 0.79, blue: 0.92)
-    static let neutralGlow = Color(red: 0.97, green: 0.99, blue: 1.00)
+    let neutralTint: Color
+    let neutralTone: Color
+    let neutralGlow: Color
 
-    static let primaryText = Color(red: 0.08, green: 0.10, blue: 0.14)
-    static let secondaryText = Color(red: 0.33, green: 0.38, blue: 0.46)
-    static let tertiaryText = Color(red: 0.44, green: 0.49, blue: 0.58)
+    let primaryText: Color
+    let secondaryText: Color
+    let tertiaryText: Color
 
-    static let lineSoft = Color.white.opacity(0.72)
-    static let lineStrong = Color.white.opacity(0.92)
-    static let surfaceWash = Color.white.opacity(0.22)
+    let lineSoft: Color
+    let lineStrong: Color
+    let surfaceWash: Color
 
-    static let focusTint = Color(red: 0.28, green: 0.63, blue: 1.00)
-    static let focusGlow = Color(red: 0.58, green: 0.84, blue: 1.00)
-    static let focusDeep = Color(red: 0.11, green: 0.27, blue: 0.54)
-    static let focusText = Color.white.opacity(0.97)
+    let focusTint: Color
+    let focusGlow: Color
+    let focusDeep: Color
+    let focusText: Color
 
-    static let errorAccent = Color(red: 0.84, green: 0.34, blue: 0.31)
-    static let errorBackground = Color(red: 0.99, green: 0.92, blue: 0.91)
-    static let errorText = Color(red: 0.46, green: 0.15, blue: 0.14)
+    let errorAccent: Color
+    let errorBackground: Color
+    let errorText: Color
+
+    let materialFill: Color
+    let materialTail: Color
+    let highlightBase: Color
+    let panelShadow: Color
+    let previewBackground: Color
+
+    let statusDotGlowOpacity: Double
+    let expandedShadowOpacity: Double
+    let collapsedShadowOpacity: Double
+    let expandedGlowOpacity: Double
+    let collapsedGlowOpacity: Double
+
+    static func resolve(for colorScheme: ColorScheme) -> FloatingTheme {
+        colorScheme == .dark ? .dark : .light
+    }
+
+    static let light = FloatingTheme(
+        id: 0,
+        accentStart: Color(red: 0.38, green: 0.70, blue: 1.00),
+        accentEnd: Color(red: 0.54, green: 0.57, blue: 1.00),
+        accentGlow: Color(red: 0.76, green: 0.90, blue: 1.00),
+        neutralTint: Color(red: 0.88, green: 0.92, blue: 0.98),
+        neutralTone: Color(red: 0.72, green: 0.79, blue: 0.92),
+        neutralGlow: Color(red: 0.97, green: 0.99, blue: 1.00),
+        primaryText: Color(red: 0.08, green: 0.10, blue: 0.14),
+        secondaryText: Color(red: 0.33, green: 0.38, blue: 0.46),
+        tertiaryText: Color(red: 0.44, green: 0.49, blue: 0.58),
+        lineSoft: Color.white.opacity(0.72),
+        lineStrong: Color.white.opacity(0.92),
+        surfaceWash: Color.white.opacity(0.22),
+        focusTint: Color(red: 0.28, green: 0.63, blue: 1.00),
+        focusGlow: Color(red: 0.58, green: 0.84, blue: 1.00),
+        focusDeep: Color(red: 0.11, green: 0.27, blue: 0.54),
+        focusText: Color.white.opacity(0.97),
+        errorAccent: Color(red: 0.84, green: 0.34, blue: 0.31),
+        errorBackground: Color(red: 0.99, green: 0.92, blue: 0.91),
+        errorText: Color(red: 0.46, green: 0.15, blue: 0.14),
+        materialFill: .white,
+        materialTail: .white,
+        highlightBase: .white,
+        panelShadow: .black,
+        previewBackground: Color(red: 0.92, green: 0.95, blue: 0.99),
+        statusDotGlowOpacity: 0.4,
+        expandedShadowOpacity: 0.09,
+        collapsedShadowOpacity: 0.05,
+        expandedGlowOpacity: 0.10,
+        collapsedGlowOpacity: 0.05
+    )
+
+    static let dark = FloatingTheme(
+        id: 1,
+        accentStart: Color(red: 0.46, green: 0.74, blue: 1.00),
+        accentEnd: Color(red: 0.55, green: 0.60, blue: 1.00),
+        accentGlow: Color(red: 0.62, green: 0.85, blue: 1.00),
+        neutralTint: Color(red: 0.15, green: 0.18, blue: 0.24),
+        neutralTone: Color(red: 0.24, green: 0.28, blue: 0.36),
+        neutralGlow: Color(red: 0.31, green: 0.37, blue: 0.47),
+        primaryText: Color(red: 0.94, green: 0.96, blue: 0.99),
+        secondaryText: Color(red: 0.72, green: 0.77, blue: 0.85),
+        tertiaryText: Color(red: 0.56, green: 0.62, blue: 0.71),
+        lineSoft: Color.white.opacity(0.12),
+        lineStrong: Color.white.opacity(0.24),
+        surfaceWash: Color.white.opacity(0.08),
+        focusTint: Color(red: 0.25, green: 0.60, blue: 1.00),
+        focusGlow: Color(red: 0.56, green: 0.83, blue: 1.00),
+        focusDeep: Color(red: 0.09, green: 0.20, blue: 0.39),
+        focusText: Color.white.opacity(0.98),
+        errorAccent: Color(red: 0.93, green: 0.40, blue: 0.36),
+        errorBackground: Color(red: 0.26, green: 0.14, blue: 0.15),
+        errorText: Color(red: 1.00, green: 0.85, blue: 0.84),
+        materialFill: .black,
+        materialTail: .black,
+        highlightBase: .white,
+        panelShadow: .black,
+        previewBackground: Color(red: 0.08, green: 0.10, blue: 0.14),
+        statusDotGlowOpacity: 0.58,
+        expandedShadowOpacity: 0.34,
+        collapsedShadowOpacity: 0.26,
+        expandedGlowOpacity: 0.18,
+        collapsedGlowOpacity: 0.10
+    )
 }
 
 private struct LiquidGlassSurface: View {
@@ -419,6 +526,7 @@ private struct LiquidGlassSurface: View {
     let tintStrength: CGFloat
     let fillOpacity: CGFloat
     let highlightOpacity: CGFloat
+    let theme: FloatingTheme
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -426,7 +534,7 @@ private struct LiquidGlassSurface: View {
                 .fill(.ultraThinMaterial)
 
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(Color.white.opacity(fillOpacity))
+                .fill(theme.materialFill.opacity(fillOpacity))
 
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .fill(
@@ -434,7 +542,7 @@ private struct LiquidGlassSurface: View {
                         colors: [
                             tint.opacity(tintStrength),
                             tint.opacity(tintStrength * 0.45),
-                            Color.white.opacity(0.02)
+                            theme.materialTail.opacity(fillOpacity * 0.16)
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -444,7 +552,7 @@ private struct LiquidGlassSurface: View {
             Capsule(style: .continuous)
                 .fill(
                     LinearGradient(
-                        colors: [Color.white.opacity(highlightOpacity), Color.white.opacity(0.04)],
+                        colors: [theme.highlightBase.opacity(highlightOpacity), theme.highlightBase.opacity(0.04)],
                         startPoint: .top,
                         endPoint: .bottom
                     )
@@ -456,7 +564,7 @@ private struct LiquidGlassSurface: View {
         }
         .overlay(
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .stroke(FloatingPalette.lineStrong.opacity(0.75), lineWidth: 0.8)
+                .stroke(theme.lineStrong.opacity(0.75), lineWidth: 0.8)
         )
         .overlay(
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
@@ -468,20 +576,22 @@ private struct LiquidGlassSurface: View {
 
 private struct BrandBadge: View {
     let size: CGFloat
+    let theme: FloatingTheme
 
     var body: some View {
         ZStack {
             LiquidGlassSurface(
                 cornerRadius: size * 0.38,
-                tint: FloatingPalette.accentStart,
+                tint: theme.accentStart,
                 tintStrength: 0.22,
                 fillOpacity: 0.22,
-                highlightOpacity: 0.82
+                highlightOpacity: 0.82,
+                theme: theme
             )
 
             Image(systemName: "command")
                 .font(.system(size: size * 0.36, weight: .bold))
-                .foregroundStyle(FloatingPalette.primaryText)
+                .foregroundStyle(theme.primaryText)
         }
         .frame(width: size, height: size)
     }
@@ -495,6 +605,7 @@ private struct StateBanner: View {
     let textColor: Color
     let backgroundColor: Color
     let tint: Color
+    let theme: FloatingTheme
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -530,7 +641,8 @@ private struct StateBanner: View {
                     tint: tint,
                     tintStrength: 0.1,
                     fillOpacity: 0.18,
-                    highlightOpacity: 0.68
+                    highlightOpacity: 0.68,
+                    theme: theme
                 )
 
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -544,6 +656,7 @@ private struct FooterControlButton: View {
     let systemImage: String
     let foreground: Color
     let backgroundTint: Color
+    let theme: FloatingTheme
 
     var body: some View {
         Image(systemName: systemImage)
@@ -556,25 +669,27 @@ private struct FooterControlButton: View {
                     tint: backgroundTint,
                     tintStrength: 0.14,
                     fillOpacity: 0.2,
-                    highlightOpacity: 0.68
+                    highlightOpacity: 0.68,
+                    theme: theme
                 )
             )
     }
 }
 
-private struct SpaceRow: View {
+private struct SpaceRow: View, Equatable {
     let space: YabaiSpace
+    let theme: FloatingTheme
 
     private var titleStyle: AnyShapeStyle {
-        AnyShapeStyle(space.hasFocus ? FloatingPalette.focusText : FloatingPalette.primaryText)
+        AnyShapeStyle(space.hasFocus ? theme.focusText : theme.primaryText)
     }
 
     private var subtitleStyle: AnyShapeStyle {
-        AnyShapeStyle(space.hasFocus ? FloatingPalette.focusText.opacity(0.8) : FloatingPalette.secondaryText)
+        AnyShapeStyle(space.hasFocus ? theme.focusText.opacity(0.8) : theme.secondaryText)
     }
 
     private var trailingStyle: AnyShapeStyle {
-        AnyShapeStyle(space.hasFocus ? FloatingPalette.focusText.opacity(0.86) : FloatingPalette.tertiaryText)
+        AnyShapeStyle(space.hasFocus ? theme.focusText.opacity(0.86) : theme.tertiaryText)
     }
 
     private var subtitle: String {
@@ -590,16 +705,17 @@ private struct SpaceRow: View {
             ZStack {
                 LiquidGlassSurface(
                     cornerRadius: 12,
-                    tint: space.hasFocus ? FloatingPalette.focusGlow : FloatingPalette.neutralTint,
+                    tint: space.hasFocus ? theme.focusGlow : theme.neutralTint,
                     tintStrength: space.hasFocus ? 0.34 : 0.08,
                     fillOpacity: space.hasFocus ? 0.34 : 0.18,
-                    highlightOpacity: space.hasFocus ? 0.9 : 0.68
+                    highlightOpacity: space.hasFocus ? 0.9 : 0.68,
+                    theme: theme
                 )
 
                 Text("\(space.index)")
                     .font(.system(size: 14, weight: .bold, design: .rounded))
                     .monospacedDigit()
-                    .foregroundStyle(space.hasFocus ? FloatingPalette.focusDeep : FloatingPalette.primaryText)
+                    .foregroundStyle(space.hasFocus ? theme.focusDeep : theme.primaryText)
                     .contentTransition(.numericText())
             }
             .frame(width: 34, height: 34)
@@ -621,12 +737,12 @@ private struct SpaceRow: View {
             if space.hasFocus {
                 Text("Active")
                     .font(.system(size: 8, weight: .bold, design: .rounded))
-                    .foregroundStyle(FloatingPalette.focusText)
+                    .foregroundStyle(theme.focusText)
                     .padding(.horizontal, 7)
                     .padding(.vertical, 4)
                     .background(
                         Capsule(style: .continuous)
-                            .fill(FloatingPalette.focusDeep.opacity(0.36))
+                            .fill(theme.focusDeep.opacity(0.36))
                     )
             } else {
                 Image(systemName: "chevron.right")
@@ -640,18 +756,19 @@ private struct SpaceRow: View {
         .background(
             LiquidGlassSurface(
                 cornerRadius: 18,
-                tint: space.hasFocus ? FloatingPalette.focusTint : FloatingPalette.neutralTone,
+                tint: space.hasFocus ? theme.focusTint : theme.neutralTone,
                 tintStrength: space.hasFocus ? 0.32 : 0.07,
                 fillOpacity: space.hasFocus ? 0.28 : 0.15,
-                highlightOpacity: space.hasFocus ? 0.9 : 0.7
+                highlightOpacity: space.hasFocus ? 0.9 : 0.7,
+                theme: theme
             )
         )
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(space.hasFocus ? FloatingPalette.focusGlow.opacity(0.95) : FloatingPalette.lineSoft.opacity(0.28), lineWidth: space.hasFocus ? 1.05 : 0.6)
+                .stroke(space.hasFocus ? theme.focusGlow.opacity(0.95) : theme.lineSoft.opacity(0.28), lineWidth: space.hasFocus ? 1.05 : 0.6)
         )
         .shadow(
-            color: (space.hasFocus ? FloatingPalette.focusTint : Color.black).opacity(space.hasFocus ? 0.24 : 0.03),
+            color: (space.hasFocus ? theme.focusTint : Color.black).opacity(space.hasFocus ? 0.24 : 0.03),
             radius: space.hasFocus ? 14 : 6,
             x: 0,
             y: space.hasFocus ? 8 : 3
@@ -661,7 +778,7 @@ private struct SpaceRow: View {
     }
 }
 
-struct YabaiSpace: Codable, Identifiable {
+struct YabaiSpace: Codable, Identifiable, Equatable {
     let id: Int
     let index: Int
     let label: String?
@@ -692,18 +809,29 @@ final class YabaiSpacesMonitor: ObservableObject {
         case manual
         case spaceChange
         case focusRequest
+        case hover
     }
 
     @Published private(set) var spaces: [YabaiSpace] = []
     @Published private(set) var errorMessage: String?
     @Published private(set) var isLoading = false
-    @Published private(set) var lastUpdated: Date?
     @Published private(set) var panelPresentation: FloatingPanelPresentation
+
+    private(set) var lastUpdated: Date?
+    private var isPointerInside = false
+    private var isRefreshing = false
+    private var isSuspended = false
 
     private let executableURL: URL?
     private var refreshTimer: Timer?
     private var collapseTask: Task<Void, Never>?
+    private var followUpRefreshTask: Task<Void, Never>?
     private var hasLoadedSnapshot = false
+    private var lastRefreshStartedAt: Date?
+
+    nonisolated private static let queryTimeout: TimeInterval = 1.0
+    nonisolated private static let focusTimeout: TimeInterval = 1.5
+    nonisolated private static let terminationGracePeriod: TimeInterval = 0.12
 
     init() {
         self.executableURL = Self.resolveExecutableURL()
@@ -713,6 +841,7 @@ final class YabaiSpacesMonitor: ObservableObject {
     deinit {
         refreshTimer?.invalidate()
         collapseTask?.cancel()
+        followUpRefreshTask?.cancel()
     }
 
     var focusedSpace: YabaiSpace? {
@@ -728,14 +857,7 @@ final class YabaiSpacesMonitor: ObservableObject {
 
     func start() {
         guard refreshTimer == nil else { return }
-
         refresh(trigger: .startup)
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
-            guard let monitor = self else { return }
-            Task { @MainActor [monitor] in
-                monitor.refresh(trigger: .timer)
-            }
-        }
     }
 
     func revealPanelTemporarily() {
@@ -743,33 +865,87 @@ final class YabaiSpacesMonitor: ObservableObject {
         scheduleAutoCollapseIfNeeded()
     }
 
+    func suspendRefreshing() {
+        guard !isSuspended else { return }
+        isSuspended = true
+        refreshTimer?.invalidate()
+        refreshTimer = nil
+        followUpRefreshTask?.cancel()
+        followUpRefreshTask = nil
+    }
+
+    func resumeRefreshing() {
+        guard isSuspended else { return }
+        isSuspended = false
+
+        if hasLoadedSnapshot {
+            scheduleFollowUpRefresh(after: 0.1, trigger: .timer)
+        } else {
+            refresh(trigger: .startup)
+        }
+    }
+
+    func setPointerInside(_ isInside: Bool) {
+        guard isPointerInside != isInside else { return }
+        isPointerInside = isInside
+        scheduleNextRefresh()
+
+        guard isInside else { return }
+        guard shouldRefreshSoonForHover else { return }
+        scheduleFollowUpRefresh(after: 0.05, trigger: .hover)
+    }
+
     func refresh(trigger: RefreshTrigger = .manual) {
-        if trigger != .timer {
+        guard !isSuspended else { return }
+
+        if trigger != .timer, trigger != .hover {
             revealPanelTemporarily()
         }
 
-        guard !isLoading else { return }
+        if shouldSkipRefresh(for: trigger) {
+            scheduleDeferredRefresh(for: trigger)
+            return
+        }
 
-        isLoading = true
+        guard !isRefreshing else {
+            scheduleDeferredRefresh(for: trigger)
+            return
+        }
+
+        isRefreshing = true
+        let shouldShowLoading = shouldSurfaceLoadingState(for: trigger)
+        if shouldShowLoading, !isLoading {
+            isLoading = true
+        }
+        lastRefreshStartedAt = .now
 
         let executableURL = self.executableURL
         let previousFocusedID = focusedSpace?.id
+        let previousSpaces = spaces
         let hadError = errorMessage != nil
 
         Task.detached(priority: .utility) {
             let result = Result { try Self.querySpaces(using: executableURL) }
             await MainActor.run {
-                self.isLoading = false
+                self.isRefreshing = false
+                if self.isLoading {
+                    self.isLoading = false
+                }
 
                 switch result {
                 case .success(let spaces):
                     let sortedSpaces = spaces.sorted { $0.index < $1.index }
                     let newFocusedID = sortedSpaces.first(where: \.hasFocus)?.id
                     let focusChanged = previousFocusedID != newFocusedID
-                    let shouldReveal = !self.hasLoadedSnapshot || hadError || focusChanged || trigger != .timer
+                    let snapshotChanged = previousSpaces != sortedSpaces
+                    let shouldReveal = !self.hasLoadedSnapshot || hadError || focusChanged || (trigger != .timer && trigger != .hover)
 
-                    self.spaces = sortedSpaces
-                    self.errorMessage = nil
+                    if snapshotChanged {
+                        self.spaces = sortedSpaces
+                    }
+                    if self.errorMessage != nil {
+                        self.errorMessage = nil
+                    }
                     self.lastUpdated = .now
                     self.hasLoadedSnapshot = true
 
@@ -777,10 +953,15 @@ final class YabaiSpacesMonitor: ObservableObject {
                         self.revealPanelTemporarily()
                     }
                 case .failure(let error):
-                    self.errorMessage = error.localizedDescription
+                    let message = error.localizedDescription
+                    if self.errorMessage != message {
+                        self.errorMessage = message
+                    }
                     self.setPanelPresentation(.expanded)
                     self.cancelAutoCollapse()
                 }
+
+                self.scheduleNextRefresh()
             }
         }
     }
@@ -794,9 +975,14 @@ final class YabaiSpacesMonitor: ObservableObject {
         revealPanelTemporarily()
 
         let executableURL = self.executableURL
+        let focusTimeout = Self.focusTimeout
         Task.detached(priority: .userInitiated) {
             let result = Result {
-                try Self.runYabai(arguments: ["-m", "space", "--focus", "\(space.index)"], using: executableURL)
+                try Self.runYabai(
+                    arguments: ["-m", "space", "--focus", "\(space.index)"],
+                    timeout: focusTimeout,
+                    using: executableURL
+                )
             }
 
             await MainActor.run {
@@ -804,8 +990,11 @@ final class YabaiSpacesMonitor: ObservableObject {
                     self.errorMessage = error.localizedDescription
                     self.setPanelPresentation(.expanded)
                     self.cancelAutoCollapse()
+                    self.scheduleNextRefresh()
+                    return
                 }
-                self.refresh(trigger: .focusRequest)
+
+                self.scheduleFollowUpRefresh(after: FloatingPanelMetrics.focusRefreshDelay, trigger: .focusRequest)
             }
         }
     }
@@ -838,12 +1027,94 @@ final class YabaiSpacesMonitor: ObservableObject {
         collapseTask = nil
     }
 
-    nonisolated private static func querySpaces(using executableURL: URL?) throws -> [YabaiSpace] {
-        let data = try runYabai(arguments: ["-m", "query", "--spaces"], using: executableURL)
-        return try JSONDecoder().decode([YabaiSpace].self, from: data)
+    private func scheduleDeferredRefresh(for trigger: RefreshTrigger) {
+        if trigger == .timer {
+            scheduleNextRefresh()
+            return
+        }
+        scheduleFollowUpRefresh(after: FloatingPanelMetrics.eventRefreshDebounce, trigger: trigger)
     }
 
-    nonisolated private static func runYabai(arguments: [String], using executableURL: URL?) throws -> Data {
+    private func scheduleFollowUpRefresh(after delay: TimeInterval, trigger: RefreshTrigger) {
+        guard !isSuspended else { return }
+        followUpRefreshTask?.cancel()
+        followUpRefreshTask = Task { @MainActor [weak self] in
+            let nanoseconds = UInt64(delay * 1_000_000_000)
+            try? await Task.sleep(nanoseconds: nanoseconds)
+            guard !Task.isCancelled, let self else { return }
+            self.refresh(trigger: trigger)
+        }
+    }
+
+    private func scheduleNextRefresh() {
+        refreshTimer?.invalidate()
+        guard !isSuspended else {
+            refreshTimer = nil
+            return
+        }
+
+        let interval = nextRefreshInterval
+        let timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { [weak self] _ in
+            guard let monitor = self else { return }
+            Task { @MainActor [monitor] in
+                monitor.refresh(trigger: .timer)
+            }
+        }
+        timer.tolerance = max(0.15, interval * FloatingPanelMetrics.refreshTimerToleranceRatio)
+        refreshTimer = timer
+    }
+
+    private var nextRefreshInterval: TimeInterval {
+        if errorMessage != nil {
+            return FloatingPanelMetrics.refreshIntervalError
+        }
+        if isLoading || spaces.isEmpty {
+            return FloatingPanelMetrics.refreshIntervalLoading
+        }
+        if isPointerInside || effectivePresentation == .expanded {
+            return FloatingPanelMetrics.refreshIntervalInteractive
+        }
+        return FloatingPanelMetrics.refreshIntervalCollapsedIdle
+    }
+
+    private var shouldRefreshSoonForHover: Bool {
+        guard !isLoading else { return false }
+        guard let lastUpdated else { return true }
+        return Date.now.timeIntervalSince(lastUpdated) >= FloatingPanelMetrics.hoverRefreshStalenessThreshold
+    }
+
+    private func shouldSurfaceLoadingState(for trigger: RefreshTrigger) -> Bool {
+        if !hasLoadedSnapshot || spaces.isEmpty || errorMessage != nil {
+            return true
+        }
+
+        switch trigger {
+        case .manual, .spaceChange, .focusRequest, .startup:
+            return true
+        case .timer, .hover:
+            return false
+        }
+    }
+
+    private func shouldSkipRefresh(for trigger: RefreshTrigger) -> Bool {
+        guard trigger != .manual, trigger != .startup else { return false }
+        guard let lastRefreshStartedAt else { return false }
+
+        return Date.now.timeIntervalSince(lastRefreshStartedAt) < FloatingPanelMetrics.eventRefreshDebounce
+    }
+
+    nonisolated private static let decoder = JSONDecoder()
+
+    nonisolated private static func querySpaces(using executableURL: URL?) throws -> [YabaiSpace] {
+        let data = try runYabai(
+            arguments: ["-m", "query", "--spaces"],
+            timeout: queryTimeout,
+            using: executableURL
+        )
+        return try decoder.decode([YabaiSpace].self, from: data)
+    }
+
+    nonisolated private static func runYabai(arguments: [String], timeout: TimeInterval, using executableURL: URL?) throws -> Data {
         guard let executableURL else {
             throw YabaiMonitorError.executableNotFound
         }
@@ -857,8 +1128,22 @@ final class YabaiSpacesMonitor: ObservableObject {
         process.standardOutput = stdout
         process.standardError = stderr
 
+        let finished = DispatchSemaphore(value: 0)
+        process.terminationHandler = { _ in
+            finished.signal()
+        }
+
         try process.run()
-        process.waitUntilExit()
+
+        if finished.wait(timeout: .now() + timeout) == .timedOut, process.isRunning {
+            process.interrupt()
+            Thread.sleep(forTimeInterval: terminationGracePeriod)
+            if process.isRunning {
+                process.terminate()
+                Thread.sleep(forTimeInterval: terminationGracePeriod)
+            }
+            throw YabaiMonitorError.commandTimedOut(arguments.joined(separator: " "))
+        }
 
         let output = stdout.fileHandleForReading.readDataToEndOfFile()
         let errorOutput = stderr.fileHandleForReading.readDataToEndOfFile()
@@ -901,6 +1186,7 @@ final class YabaiSpacesMonitor: ObservableObject {
 enum YabaiMonitorError: LocalizedError {
     case executableNotFound
     case commandFailed(String)
+    case commandTimedOut(String)
 
     var errorDescription: String? {
         switch self {
@@ -908,14 +1194,24 @@ enum YabaiMonitorError: LocalizedError {
             return "Could not find the yabai executable. Set YABAI_BIN or install yabai in /opt/homebrew/bin."
         case .commandFailed(let message):
             return message
+        case .commandTimedOut(let command):
+            return "Timed out while running: \(command)"
         }
     }
 }
 
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
-        ContentView(monitor: YabaiSpacesMonitor())
-            .padding(24)
-            .background(Color(red: 0.92, green: 0.95, blue: 0.99))
+        Group {
+            ContentView(monitor: YabaiSpacesMonitor())
+                .padding(24)
+                .background(FloatingTheme.light.previewBackground)
+                .preferredColorScheme(.light)
+
+            ContentView(monitor: YabaiSpacesMonitor())
+                .padding(24)
+                .background(FloatingTheme.dark.previewBackground)
+                .preferredColorScheme(.dark)
+        }
     }
 }
