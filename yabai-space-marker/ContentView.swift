@@ -43,13 +43,13 @@ enum FloatingPanelMetrics {
     static let focusCommandTimeout: TimeInterval = 1.5
     static let processTerminationGracePeriod: TimeInterval = 0.12
     // Jelly spring — expand: bouncy overshoot from center outward
-    static let jellyExpandAnimation  = Animation.spring(response: 0.54, dampingFraction: 0.62, blendDuration: 0.10)
+    static let jellyExpandAnimation  = Animation.spring(response: 0.34, dampingFraction: 0.82, blendDuration: 0.08)
     // Jelly spring — collapse: high damping to avoid negative-value overshoot on removal
-    static let jellyCollapseAnimation = Animation.spring(response: 0.38, dampingFraction: 0.82, blendDuration: 0.08)
+    static let jellyCollapseAnimation = Animation.spring(response: 0.26, dampingFraction: 0.90, blendDuration: 0.06)
     // Panel frame resize — silky spring
-    static let panelAnimation  = Animation.spring(response: 0.50, dampingFraction: 0.68, blendDuration: 0.12)
+    static let panelAnimation  = Animation.spring(response: 0.28, dampingFraction: 0.88, blendDuration: 0.08)
     // Inner content cross-fades
-    static let contentAnimation = Animation.spring(response: 0.34, dampingFraction: 0.76, blendDuration: 0.08)
+    static let contentAnimation = Animation.easeOut(duration: 0.16)
     // Pure opacity fades
     static let fadeAnimation   = Animation.easeInOut(duration: 0.22)
     static let snapAnimation   = Animation.easeInOut(duration: 0.16)
@@ -183,20 +183,13 @@ struct ContentView: View {
     }
 
     var body: some View {
-        ZStack {
-            collapsedPanel
-                .opacity(isExpanded ? 0 : 1)
-                .allowsHitTesting(!isExpanded)
-                .accessibilityHidden(isExpanded)
-                .zIndex(isExpanded ? 0 : 1)
-
-            expandedPanel
-                .opacity(isExpanded ? 1 : 0)
-                .allowsHitTesting(isExpanded)
-                .accessibilityHidden(!isExpanded)
-                .zIndex(isExpanded ? 1 : 0)
+        Group {
+            if isExpanded {
+                expandedPanel
+            } else {
+                collapsedPanel
+            }
         }
-        .compositingGroup()
         .frame(
             width: isExpanded ? FloatingPanelMetrics.expandedWidth : FloatingPanelMetrics.collapsedWidth,
             height: isExpanded ? FloatingPanelMetrics.expandedHeight : FloatingPanelMetrics.collapsedHeight
@@ -214,7 +207,6 @@ struct ContentView: View {
         // that are NOT the panel expand/collapse transition itself.
         // The transition is driven by withAnimation inside setPanelPresentation.
         .animation(FloatingPanelMetrics.panelAnimation, value: isCollapsedPanelHovering)
-        .animation(FloatingPanelMetrics.contentAnimation, value: monitor.focusedSpace?.id)
         .contextMenu {
             Button("Settings…") {
                 openAppSettings()
@@ -253,6 +245,7 @@ struct ContentView: View {
                 isLoading: monitor.isLoading,
                 hasError: monitor.errorMessage != nil,
                 totalSpaces: monitor.spaces.count,
+                statusText: statusBadgeText,
                 theme: theme
             )
             .frame(width: FloatingPanelMetrics.currentCardWidth)
@@ -319,7 +312,24 @@ struct ContentView: View {
 
             Spacer(minLength: 0)
 
-            VStack(spacing: 2) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 5) {
+                    Circle()
+                        .fill(monitor.errorMessage == nil ? theme.accentStart : theme.errorAccent)
+                        .frame(width: 5, height: 5)
+                        .shadow(
+                            color: (monitor.errorMessage == nil ? theme.accentStart : theme.errorAccent).opacity(0.35),
+                            radius: 4,
+                            x: 0,
+                            y: 0
+                        )
+
+                    Text(statusBadgeText.uppercased())
+                        .font(.system(size: 7, weight: .bold, design: .monospaced))
+                        .tracking(1.0)
+                        .foregroundStyle(monitor.errorMessage == nil ? theme.accentEnd : theme.errorAccent)
+                }
+
                 Text(compactTitle)
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
                     .foregroundStyle(monitor.errorMessage == nil ? theme.primaryText : theme.errorText)
@@ -331,7 +341,7 @@ struct ContentView: View {
                     .foregroundStyle(theme.secondaryText)
                     .lineLimit(1)
             }
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             Spacer(minLength: 0)
 
@@ -361,23 +371,17 @@ struct ContentView: View {
                 ? (isExpanded ? theme.neutralTone : theme.neutralTint)
                 : theme.errorAccent,
             tintStrength: monitor.errorMessage == nil
-                ? (isExpanded ? 0.11 : (collapsedHovering ? 0.13 : 0.09))
-                : 0.08,
-            fillOpacity: isExpanded ? 0.16 : (collapsedHovering ? 0.23 : 0.2),
-            highlightOpacity: isExpanded ? 0.78 : (collapsedHovering ? 0.78 : 0.7),
+                ? (isExpanded ? 0.12 : (collapsedHovering ? 0.11 : 0.08))
+                : 0.1,
+            fillOpacity: isExpanded ? 0.2 : (collapsedHovering ? 0.24 : 0.2),
+            highlightOpacity: isExpanded ? 0.78 : (collapsedHovering ? 0.76 : 0.7),
             theme: theme
         )
         .shadow(
-            color: theme.panelShadow.opacity(isExpanded ? theme.expandedShadowOpacity : (collapsedHovering ? theme.collapsedShadowOpacity + 0.03 : theme.collapsedShadowOpacity)),
-            radius: isExpanded ? 18 : (collapsedHovering ? 15 : 12),
+            color: theme.panelShadow.opacity(isExpanded ? theme.expandedShadowOpacity : (collapsedHovering ? theme.collapsedShadowOpacity + 0.02 : theme.collapsedShadowOpacity)),
+            radius: isExpanded ? 18 : (collapsedHovering ? 14 : 12),
             x: 0,
             y: isExpanded ? 12 : (collapsedHovering ? 10 : 8)
-        )
-        .shadow(
-            color: theme.focusGlow.opacity(isExpanded ? theme.expandedGlowOpacity : (collapsedHovering ? theme.collapsedGlowOpacity + 0.04 : theme.collapsedGlowOpacity)),
-            radius: isExpanded ? 14 : (collapsedHovering ? 11 : 8),
-            x: 0,
-            y: 5
         )
     }
 }
@@ -389,10 +393,13 @@ private struct FloatingTheme: Equatable {
     let accentStart: Color
     let accentEnd: Color
     let accentGlow: Color
+    let accentHot: Color
 
     let neutralTint: Color
     let neutralTone: Color
     let neutralGlow: Color
+    let panelBase: Color
+    let chromeGlow: Color
 
     let primaryText: Color
     let secondaryText: Color
@@ -429,68 +436,74 @@ private struct FloatingTheme: Equatable {
 
     static let light = FloatingTheme(
         id: 0,
-        accentStart: Color(red: 0.38, green: 0.70, blue: 1.00),
-        accentEnd: Color(red: 0.54, green: 0.57, blue: 1.00),
-        accentGlow: Color(red: 0.76, green: 0.90, blue: 1.00),
-        neutralTint: Color(red: 0.88, green: 0.92, blue: 0.98),
-        neutralTone: Color(red: 0.72, green: 0.79, blue: 0.92),
-        neutralGlow: Color(red: 0.97, green: 0.99, blue: 1.00),
-        primaryText: Color(red: 0.08, green: 0.10, blue: 0.14),
-        secondaryText: Color(red: 0.33, green: 0.38, blue: 0.46),
-        tertiaryText: Color(red: 0.44, green: 0.49, blue: 0.58),
+        accentStart: Color(red: 0.10, green: 0.86, blue: 1.00),
+        accentEnd: Color(red: 0.48, green: 0.43, blue: 1.00),
+        accentGlow: Color(red: 0.76, green: 0.98, blue: 1.00),
+        accentHot: Color(red: 0.98, green: 0.31, blue: 0.75),
+        neutralTint: Color(red: 0.86, green: 0.92, blue: 1.00),
+        neutralTone: Color(red: 0.65, green: 0.75, blue: 0.95),
+        neutralGlow: Color(red: 0.91, green: 0.97, blue: 1.00),
+        panelBase: Color(red: 0.86, green: 0.90, blue: 0.99),
+        chromeGlow: Color(red: 0.66, green: 0.45, blue: 0.98),
+        primaryText: Color(red: 0.05, green: 0.07, blue: 0.12),
+        secondaryText: Color(red: 0.25, green: 0.33, blue: 0.46),
+        tertiaryText: Color(red: 0.37, green: 0.43, blue: 0.58),
         lineSoft: Color.white.opacity(0.72),
-        lineStrong: Color.white.opacity(0.92),
-        surfaceWash: Color.white.opacity(0.22),
-        focusTint: Color(red: 0.28, green: 0.63, blue: 1.00),
-        focusGlow: Color(red: 0.58, green: 0.84, blue: 1.00),
-        focusDeep: Color(red: 0.11, green: 0.27, blue: 0.54),
+        lineStrong: Color.white.opacity(0.96),
+        surfaceWash: Color.white.opacity(0.26),
+        focusTint: Color(red: 0.00, green: 0.77, blue: 1.00),
+        focusGlow: Color(red: 0.48, green: 0.92, blue: 1.00),
+        focusDeep: Color(red: 0.07, green: 0.16, blue: 0.38),
         focusText: Color.white.opacity(0.97),
-        errorAccent: Color(red: 0.84, green: 0.34, blue: 0.31),
-        errorBackground: Color(red: 0.99, green: 0.92, blue: 0.91),
-        errorText: Color(red: 0.46, green: 0.15, blue: 0.14),
+        errorAccent: Color(red: 0.97, green: 0.31, blue: 0.36),
+        errorBackground: Color(red: 1.00, green: 0.92, blue: 0.93),
+        errorText: Color(red: 0.52, green: 0.11, blue: 0.14),
         materialFill: .white,
-        materialTail: .white,
+        materialTail: Color(red: 0.93, green: 0.90, blue: 1.00),
         highlightBase: .white,
         panelShadow: .black,
-        previewBackground: Color(red: 0.92, green: 0.95, blue: 0.99),
-        statusDotGlowOpacity: 0.4,
-        expandedShadowOpacity: 0.09,
-        collapsedShadowOpacity: 0.05,
-        expandedGlowOpacity: 0.09,
-        collapsedGlowOpacity: 0.05
+        previewBackground: Color(red: 0.90, green: 0.94, blue: 1.00),
+        statusDotGlowOpacity: 0.52,
+        expandedShadowOpacity: 0.12,
+        collapsedShadowOpacity: 0.08,
+        expandedGlowOpacity: 0.14,
+        collapsedGlowOpacity: 0.10
     )
 
     static let dark = FloatingTheme(
         id: 1,
-        accentStart: Color(red: 0.46, green: 0.74, blue: 1.00),
-        accentEnd: Color(red: 0.55, green: 0.60, blue: 1.00),
-        accentGlow: Color(red: 0.62, green: 0.85, blue: 1.00),
-        neutralTint: Color(red: 0.15, green: 0.18, blue: 0.24),
-        neutralTone: Color(red: 0.24, green: 0.28, blue: 0.36),
-        neutralGlow: Color(red: 0.31, green: 0.37, blue: 0.47),
-        primaryText: Color(red: 0.94, green: 0.96, blue: 0.99),
-        secondaryText: Color(red: 0.72, green: 0.77, blue: 0.85),
-        tertiaryText: Color(red: 0.56, green: 0.62, blue: 0.71),
+        accentStart: Color(red: 0.00, green: 0.88, blue: 1.00),
+        accentEnd: Color(red: 0.42, green: 0.28, blue: 1.00),
+        accentGlow: Color(red: 0.38, green: 0.97, blue: 1.00),
+        accentHot: Color(red: 1.00, green: 0.24, blue: 0.76),
+        neutralTint: Color(red: 0.08, green: 0.10, blue: 0.17),
+        neutralTone: Color(red: 0.14, green: 0.16, blue: 0.28),
+        neutralGlow: Color(red: 0.27, green: 0.32, blue: 0.52),
+        panelBase: Color(red: 0.03, green: 0.05, blue: 0.12),
+        chromeGlow: Color(red: 0.74, green: 0.22, blue: 1.00),
+        primaryText: Color(red: 0.92, green: 0.97, blue: 1.00),
+        secondaryText: Color(red: 0.61, green: 0.74, blue: 0.92),
+        tertiaryText: Color(red: 0.46, green: 0.57, blue: 0.74),
         lineSoft: Color.white.opacity(0.12),
-        lineStrong: Color.white.opacity(0.24),
-        surfaceWash: Color.white.opacity(0.08),
-        focusTint: Color(red: 0.25, green: 0.60, blue: 1.00),
-        focusGlow: Color(red: 0.56, green: 0.83, blue: 1.00),
-        focusDeep: Color(red: 0.09, green: 0.20, blue: 0.39),
+        lineStrong: Color.white.opacity(0.28),
+        surfaceWash: Color.white.opacity(0.09),
+        focusTint: Color(red: 0.00, green: 0.72, blue: 1.00),
+        focusGlow: Color(red: 0.30, green: 0.94, blue: 1.00),
+        focusDeep: Color(red: 0.05, green: 0.11, blue: 0.22),
         focusText: Color.white.opacity(0.98),
-        errorAccent: Color(red: 0.93, green: 0.40, blue: 0.36),
-        errorBackground: Color(red: 0.26, green: 0.14, blue: 0.15),
-        errorText: Color(red: 1.00, green: 0.85, blue: 0.84),
+        errorAccent: Color(red: 1.00, green: 0.35, blue: 0.38),
+        errorBackground: Color(red: 0.24, green: 0.08, blue: 0.12),
+        errorText: Color(red: 1.00, green: 0.83, blue: 0.86),
         materialFill: .black,
-        materialTail: .black,
+        materialTail: Color(red: 0.10, green: 0.02, blue: 0.18),
         highlightBase: .white,
         panelShadow: .black,
-        previewBackground: Color(red: 0.08, green: 0.10, blue: 0.14),
-        statusDotGlowOpacity: 0.58,
-        expandedShadowOpacity: 0.3,
-        collapsedShadowOpacity: 0.22,
-        expandedGlowOpacity: 0.15,
-        collapsedGlowOpacity: 0.08
+        previewBackground: Color(red: 0.02, green: 0.04, blue: 0.09),
+        statusDotGlowOpacity: 0.72,
+        expandedShadowOpacity: 0.36,
+        collapsedShadowOpacity: 0.28,
+        expandedGlowOpacity: 0.24,
+        collapsedGlowOpacity: 0.14
     )
 }
 
@@ -508,15 +521,12 @@ private struct LiquidGlassSurface: View {
                 .fill(.ultraThinMaterial)
 
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(theme.materialFill.opacity(fillOpacity))
-
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .fill(
                     LinearGradient(
                         colors: [
-                            tint.opacity(tintStrength),
-                            tint.opacity(tintStrength * 0.42),
-                            theme.materialTail.opacity(fillOpacity * 0.14)
+                            theme.panelBase.opacity(fillOpacity * 0.95),
+                            tint.opacity(tintStrength * 0.45),
+                            theme.materialTail.opacity(fillOpacity * 0.24)
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -526,15 +536,20 @@ private struct LiquidGlassSurface: View {
             Capsule(style: .continuous)
                 .fill(
                     LinearGradient(
-                        colors: [theme.highlightBase.opacity(highlightOpacity), theme.highlightBase.opacity(0.03)],
+                        colors: [theme.highlightBase.opacity(highlightOpacity), theme.highlightBase.opacity(0.02)],
                         startPoint: .top,
                         endPoint: .bottom
                     )
                 )
-                .frame(height: max(12, cornerRadius * 0.85))
-                .padding(.horizontal, 6)
-                .padding(.top, 4)
-                .blur(radius: 0.6)
+                .frame(height: max(12, cornerRadius * 0.78))
+                .padding(.horizontal, 8)
+                .padding(.top, 5)
+
+            Rectangle()
+                .fill(tint.opacity(tintStrength * 0.85))
+                .frame(height: 1.2)
+                .padding(.horizontal, 18)
+                .padding(.top, 8)
         }
         .overlay(
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
@@ -542,8 +557,7 @@ private struct LiquidGlassSurface: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .stroke(tint.opacity(tintStrength * 1.5), lineWidth: 0.65)
-                .blur(radius: 0.25)
+                .stroke(tint.opacity(tintStrength * 0.72), lineWidth: 0.65)
         )
     }
 }
@@ -571,17 +585,18 @@ private struct StatusPill: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: 9, weight: .bold, design: .rounded))
+            .font(.system(size: 8, weight: .bold, design: .monospaced))
+            .tracking(0.9)
             .foregroundStyle(isError ? theme.errorText : theme.primaryText)
-            .padding(.horizontal, 9)
-            .padding(.vertical, 5)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
             .background(
                 LiquidGlassSurface(
                     cornerRadius: 12,
-                    tint: isError ? theme.errorAccent : theme.neutralTint,
-                    tintStrength: isError ? 0.15 : 0.08,
-                    fillOpacity: 0.18,
-                    highlightOpacity: 0.62,
+                    tint: isError ? theme.errorAccent : theme.accentEnd,
+                    tintStrength: isError ? 0.16 : 0.12,
+                    fillOpacity: 0.16,
+                    highlightOpacity: 0.58,
                     theme: theme
                 )
             )
@@ -593,6 +608,7 @@ private struct CurrentSpaceCard: View {
     let isLoading: Bool
     let hasError: Bool
     let totalSpaces: Int
+    let statusText: String
     let theme: FloatingTheme
 
     private var title: String {
@@ -615,13 +631,20 @@ private struct CurrentSpaceCard: View {
         return totalSpaces == 0 ? "Waiting for data" : "\(totalSpaces) spaces ready"
     }
 
+    private var pillTint: Color {
+        hasError ? theme.errorAccent : theme.focusTint
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             ZStack {
-                Circle()
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(
                         LinearGradient(
-                            colors: [theme.accentGlow.opacity(0.95), theme.accentStart.opacity(0.74)],
+                            colors: [
+                                (hasError ? theme.errorAccent : theme.focusTint).opacity(0.9),
+                                (hasError ? theme.errorAccent : theme.accentGlow).opacity(0.58)
+                            ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -631,17 +654,19 @@ private struct CurrentSpaceCard: View {
                     Text("\(focusedSpace.index)")
                         .font(.system(size: 22, weight: .bold, design: .rounded))
                         .monospacedDigit()
-                        .foregroundStyle(theme.focusDeep)
+                        .foregroundStyle(theme.focusText)
                         .contentTransition(.numericText())
                 } else {
                     Image(systemName: hasError ? "exclamationmark" : (isLoading ? "arrow.triangle.2.circlepath" : "rectangle.3.group.fill"))
                         .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(theme.focusDeep)
+                        .foregroundStyle(theme.focusText)
                 }
             }
-            .frame(width: 52, height: 52)
+            .frame(width: 50, height: 50)
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 5) {
+                StatusPill(text: statusText, isError: hasError, theme: theme)
+
                 Text(title)
                     .font(.system(size: 13, weight: .semibold, design: .rounded))
                     .foregroundStyle(theme.primaryText)
@@ -661,13 +686,26 @@ private struct CurrentSpaceCard: View {
         .background(
             LiquidGlassSurface(
                 cornerRadius: 22,
-                tint: hasError ? theme.errorAccent : theme.accentStart,
-                tintStrength: hasError ? 0.1 : 0.18,
-                fillOpacity: 0.24,
-                highlightOpacity: 0.84,
+                tint: pillTint,
+                tintStrength: 0.14,
+                fillOpacity: 0.22,
+                highlightOpacity: 0.76,
                 theme: theme
             )
         )
+        .overlay(alignment: .topTrailing) {
+            Capsule(style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [theme.accentStart.opacity(0.0), theme.accentEnd.opacity(0.55)],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .frame(width: 26, height: 2)
+                .padding(.top, 10)
+                .padding(.trailing, 12)
+        }
     }
 }
 
@@ -682,8 +720,12 @@ private struct StateRailCard: View {
     var body: some View {
         HStack(spacing: 12) {
             ZStack {
-                Circle()
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(tint.opacity(0.16))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(tint.opacity(0.22), lineWidth: 0.8)
+                    )
 
                 Image(systemName: systemImage)
                     .font(.system(size: 13, weight: .bold))
@@ -695,6 +737,7 @@ private struct StateRailCard: View {
                 Text(title)
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
                     .foregroundStyle(textColor)
+                    .lineLimit(1)
 
                 Text(message)
                     .font(.system(size: 10, weight: .medium, design: .rounded))
@@ -713,10 +756,17 @@ private struct StateRailCard: View {
                 tint: tint,
                 tintStrength: 0.1,
                 fillOpacity: 0.16,
-                highlightOpacity: 0.66,
+                highlightOpacity: 0.68,
                 theme: theme
             )
         )
+        .overlay(alignment: .topTrailing) {
+            Circle()
+                .fill(tint.opacity(0.68))
+                .frame(width: 5, height: 5)
+                .padding(.top, 10)
+                .padding(.trailing, 12)
+        }
     }
 }
 
@@ -750,7 +800,7 @@ private struct SpaceSliderRail: View {
                 LiquidGlassSurface(
                     cornerRadius: 24,
                     tint: theme.neutralTone,
-                    tintStrength: 0.07,
+                    tintStrength: 0.06,
                     fillOpacity: 0.14,
                     highlightOpacity: 0.64,
                     theme: theme
@@ -792,8 +842,8 @@ private struct SpaceChip: View {
     var body: some View {
         HStack(spacing: 10) {
             ZStack {
-                Circle()
-                    .fill(space.hasFocus ? theme.focusText.opacity(0.22) : theme.lineSoft.opacity(0.16))
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(space.hasFocus ? theme.focusText.opacity(0.18) : theme.lineSoft.opacity(0.16))
 
                 Text("\(space.index)")
                     .font(.system(size: 13, weight: .bold, design: .rounded))
@@ -815,6 +865,8 @@ private struct SpaceChip: View {
                     .lineLimit(1)
             }
 
+            Spacer(minLength: 0)
+
             if space.hasFocus {
                 Capsule(style: .continuous)
                     .fill(theme.focusText.opacity(0.22))
@@ -827,23 +879,31 @@ private struct SpaceChip: View {
             LiquidGlassSurface(
                 cornerRadius: 20,
                 tint: space.hasFocus ? theme.focusTint : theme.neutralTint,
-                tintStrength: space.hasFocus ? 0.32 : 0.07,
-                fillOpacity: space.hasFocus ? 0.28 : 0.14,
-                highlightOpacity: space.hasFocus ? 0.86 : 0.62,
+                tintStrength: space.hasFocus ? 0.24 : 0.06,
+                fillOpacity: space.hasFocus ? 0.2 : 0.13,
+                highlightOpacity: space.hasFocus ? 0.82 : 0.62,
                 theme: theme
             )
         )
         .overlay(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(space.hasFocus ? theme.focusGlow.opacity(0.92) : theme.lineSoft.opacity(0.2), lineWidth: space.hasFocus ? 1 : 0.6)
+                .stroke(space.hasFocus ? theme.focusGlow.opacity(0.9) : theme.lineSoft.opacity(0.18), lineWidth: space.hasFocus ? 1 : 0.6)
         )
-        .shadow(
-            color: (space.hasFocus ? theme.focusTint : Color.black).opacity(space.hasFocus ? 0.18 : 0.02),
-            radius: space.hasFocus ? 12 : 6,
-            x: 0,
-            y: space.hasFocus ? 7 : 3
-        )
-        .scaleEffect(space.hasFocus ? 1.01 : 0.985)
+        .overlay(alignment: .bottomLeading) {
+            Capsule(style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: space.hasFocus
+                            ? [theme.accentStart.opacity(0.9), theme.accentEnd.opacity(0.7)]
+                            : [theme.lineSoft.opacity(0.0), theme.lineSoft.opacity(0.0)],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .frame(width: space.hasFocus ? 34 : 0, height: 2)
+                .padding(.leading, 12)
+                .padding(.bottom, 9)
+        }
         .animation(FloatingPanelMetrics.contentAnimation, value: space.hasFocus)
     }
 }
@@ -898,12 +958,25 @@ private struct PanelActionButton: View {
                 LiquidGlassSurface(
                     cornerRadius: FloatingPanelMetrics.controlButtonSize * 0.5,
                     tint: tint,
-                    tintStrength: 0.14,
-                    fillOpacity: 0.18,
-                    highlightOpacity: 0.68,
+                    tintStrength: 0.1,
+                    fillOpacity: 0.16,
+                    highlightOpacity: 0.7,
                     theme: theme
                 )
             )
+            .overlay(
+                Circle()
+                    .stroke(tint.opacity(0.12), lineWidth: 0.8)
+                    .padding(2)
+            )
+            .overlay(alignment: .topTrailing) {
+                Capsule(style: .continuous)
+                    .fill(tint.opacity(0.45))
+                    .frame(width: 7, height: 2)
+                    .padding(.top, 5)
+                    .padding(.trailing, 4)
+            }
+            .shadow(color: tint.opacity(0.14), radius: 6, x: 0, y: 0)
     }
 }
 
