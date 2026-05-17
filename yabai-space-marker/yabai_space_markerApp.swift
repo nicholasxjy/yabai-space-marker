@@ -51,8 +51,8 @@ enum AppAppearance: String, CaseIterable, Identifiable {
         }
     }
 
-    static func resolve() -> AppAppearance {
-        if let stored = UserDefaults.standard.string(forKey: AppSettings.Keys.appearance)?.lowercased(),
+    nonisolated static func resolve() -> AppAppearance {
+        if let stored = UserDefaults.standard.string(forKey: "appearance")?.lowercased(),
            let appearance = AppAppearance(rawValue: stored) {
             return appearance
         }
@@ -191,127 +191,138 @@ struct SettingsView: View {
         )
     }
 
+    private var autoCollapseDelayText: String {
+        String(format: "%.1fs", settings.autoCollapseDelay)
+    }
+
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Settings")
-                        .font(.system(size: 24, weight: .semibold, design: .rounded))
+            VStack(alignment: .leading, spacing: 22) {
+                SettingsHeroHeader()
 
-                    Text("Tune how the floating panel behaves and how it starts.")
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
-                        .foregroundStyle(.secondary)
+                SettingsCard(
+                    icon: "slider.horizontal.3",
+                    title: "Panel",
+                    description: "Appearance, placement, and timing for the floating panel."
+                ) {
+                    VStack(spacing: 0) {
+                        SettingsRow {
+                            VStack(alignment: .leading, spacing: 12) {
+                                SettingsRowHeader(
+                                    title: "Appearance",
+                                    description: "Choose whether the panel follows macOS or stays in a fixed light or dark style."
+                                )
+
+                                Picker("Appearance", selection: $settings.appearance) {
+                                    ForEach(AppAppearance.allCases) { appearance in
+                                        Text(appearance.title).tag(appearance)
+                                    }
+                                }
+                                .pickerStyle(.segmented)
+                            }
+                        }
+
+                        SettingsRowDivider()
+
+                        SettingsRow {
+                            VStack(alignment: .leading, spacing: 12) {
+                                SettingsRowHeader(
+                                    title: "Position",
+                                    description: "Choose whether the panel stays at the top or bottom edge of the current screen."
+                                )
+
+                                Picker("Position", selection: $settings.position) {
+                                    ForEach(FloatingPanelPosition.allCases) { position in
+                                        Text(position.title).tag(position)
+                                    }
+                                }
+                                .pickerStyle(.segmented)
+                            }
+                        }
+
+                        SettingsRowDivider()
+
+                        SettingsRow {
+                            VStack(alignment: .leading, spacing: 12) {
+                                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                                    SettingsRowHeader(
+                                        title: "Auto-collapse timeout",
+                                        description: "Choose how long the panel stays expanded after interaction."
+                                    )
+
+                                    Spacer(minLength: 12)
+
+                                    SettingsValueBadge(text: autoCollapseDelayText)
+                                }
+
+                                Slider(
+                                    value: $settings.autoCollapseDelay,
+                                    in: AppSettings.minimumAutoCollapseDelay...AppSettings.maximumAutoCollapseDelay,
+                                    step: 0.1
+                                )
+                            }
+                        }
+                    }
                 }
 
-                SettingsCard(title: "Panel") {
-                    VStack(alignment: .leading, spacing: 14) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            SettingsRowHeader(
-                                title: "Appearance",
-                                description: "Choose whether the panel follows macOS or stays light/dark."
-                            )
-
-                            Picker("Appearance", selection: $settings.appearance) {
-                                ForEach(AppAppearance.allCases) { appearance in
-                                    Text(appearance.title).tag(appearance)
-                                }
-                            }
-                            .pickerStyle(.segmented)
-                        }
-
-                        Divider()
-
-                        VStack(alignment: .leading, spacing: 8) {
-                            SettingsRowHeader(
-                                title: "Position",
-                                description: "Choose which side of the current display the panel stays on."
-                            )
-
-                            Picker("Position", selection: $settings.position) {
-                                Text("Left").tag(FloatingPanelPosition.left)
-                                Text("Right").tag(FloatingPanelPosition.right)
-                            }
-                            .pickerStyle(.segmented)
-                        }
-
-                        Divider()
-
-                        VStack(alignment: .leading, spacing: 10) {
-                            HStack(alignment: .firstTextBaseline) {
+                SettingsCard(
+                    icon: "desktopcomputer",
+                    title: "System",
+                    description: "Control how Space Marker integrates with macOS."
+                ) {
+                    SettingsRow {
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack(alignment: .top, spacing: 16) {
                                 SettingsRowHeader(
-                                    title: "Auto-collapse timeout",
-                                    description: "How long the panel stays expanded after interaction."
+                                    title: "Launch at login",
+                                    description: "Start Space Marker automatically after you sign in."
                                 )
 
                                 Spacer(minLength: 12)
 
-                                Text("\(settings.autoCollapseDelay, specifier: "%.1f")s")
-                                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                                    .monospacedDigit()
-                                    .foregroundStyle(.secondary)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 6)
-                                    .background(.quaternary.opacity(0.45), in: Capsule())
+                                Toggle("", isOn: launchAtLoginBinding)
+                                    .labelsHidden()
+                                    .toggleStyle(.switch)
                             }
 
-                            Slider(
-                                value: $settings.autoCollapseDelay,
-                                in: AppSettings.minimumAutoCollapseDelay...AppSettings.maximumAutoCollapseDelay,
-                                step: 0.1
-                            )
-                        }
-                    }
-                }
-
-                SettingsCard(title: "System") {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Toggle(isOn: launchAtLoginBinding) {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text("Launch at login")
-                                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-
-                                Text("Start Space Marker automatically after you sign in.")
-                                    .font(.system(size: 12, weight: .medium, design: .rounded))
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        .toggleStyle(.switch)
-
-                        Text(settings.launchAtLoginDescription)
-                            .font(.system(size: 12, weight: .medium, design: .rounded))
-                            .foregroundStyle(.secondary)
-
-                        if let launchAtLoginError = settings.launchAtLoginError {
-                            Text(launchAtLoginError)
-                                .font(.system(size: 12, weight: .medium, design: .rounded))
-                                .foregroundStyle(.red)
-                        }
-                    }
-                }
-
-                SettingsCard(title: "App") {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("Quit Space Marker")
-                                .font(.system(size: 13, weight: .semibold, design: .rounded))
-
-                            Text("Close the floating panel and stop background refresh.")
-                                .font(.system(size: 12, weight: .medium, design: .rounded))
+                            Text(settings.launchAtLoginDescription)
+                                .font(.system(size: 12))
                                 .foregroundStyle(.secondary)
-                        }
 
-                        Spacer(minLength: 12)
-
-                        Button("Quit", role: .destructive) {
-                            NSApp.terminate(nil)
+                            if let launchAtLoginError = settings.launchAtLoginError {
+                                Text(launchAtLoginError)
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.red)
+                            }
                         }
-                        .controlSize(.large)
+                    }
+                }
+
+                SettingsCard(
+                    icon: "app.badge",
+                    title: "App",
+                    description: "Session-level controls for the current Space Marker app."
+                ) {
+                    SettingsRow {
+                        HStack(alignment: .top, spacing: 16) {
+                            SettingsRowHeader(
+                                title: "Quit Space Marker",
+                                description: "Close the floating panel and stop background refresh."
+                            )
+
+                            Spacer(minLength: 12)
+
+                            Button("Quit", role: .destructive) {
+                                NSApp.terminate(nil)
+                            }
+                            .controlSize(.large)
+                        }
                     }
                 }
             }
-            .padding(20)
+            .padding(24)
         }
-        .frame(width: 480, height: 420)
+        .frame(width: 560, height: 460)
         .background(Color(nsColor: .windowBackgroundColor))
         .preferredColorScheme(settings.preferredColorScheme)
         .onAppear {
@@ -320,26 +331,100 @@ struct SettingsView: View {
     }
 }
 
+private struct SettingsHeroHeader: View {
+    var body: some View {
+        HStack(alignment: .center, spacing: 16) {
+            Image(systemName: "gearshape.fill")
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 44, height: 44)
+                .background(
+                    LinearGradient(
+                        colors: [
+                            Color.accentColor.opacity(0.92),
+                            Color.accentColor.opacity(0.62)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                )
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Settings")
+                    .font(.system(size: 28, weight: .semibold))
+
+                Text("Adjust how Space Marker looks, behaves, and integrates with your Mac.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
 private struct SettingsCard<Content: View>: View {
+    let icon: String
     let title: String
+    let description: String
     @ViewBuilder let content: Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text(title)
-                .font(.system(size: 13, weight: .bold, design: .rounded))
-                .foregroundStyle(.secondary)
-                .textCase(.uppercase)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .center, spacing: 14) {
+                SettingsSectionIcon(systemImage: icon)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(.system(size: 15, weight: .semibold))
+
+                    Text(description)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 16)
+
+            Divider()
 
             content
         }
-        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(.white.opacity(0.16), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
         )
+        .shadow(color: .black.opacity(0.06), radius: 16, x: 0, y: 8)
+    }
+}
+
+private struct SettingsSectionIcon: View {
+    let systemImage: String
+
+    var body: some View {
+        Image(systemName: systemImage)
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(Color.accentColor)
+            .frame(width: 30, height: 30)
+            .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+    }
+}
+
+private struct SettingsRow<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        content
+            .padding(.horizontal, 18)
+            .padding(.vertical, 16)
+    }
+}
+
+private struct SettingsRowDivider: View {
+    var body: some View {
+        Divider()
+            .padding(.leading, 18)
     }
 }
 
@@ -350,12 +435,26 @@ private struct SettingsRowHeader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(title)
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .font(.system(size: 13, weight: .semibold))
 
             Text(description)
-                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .font(.system(size: 12))
                 .foregroundStyle(.secondary)
         }
+    }
+}
+
+private struct SettingsValueBadge: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 12, weight: .semibold))
+            .monospacedDigit()
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(.quaternary.opacity(0.55), in: Capsule())
     }
 }
 
@@ -441,15 +540,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .removeDuplicates()
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
-                self?.updateWindowFrame(animated: true)
-            }
-            .store(in: &cancellables)
-
-        settings.$position
-            .removeDuplicates()
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in
-                self?.updateWindowFrame(animated: true)
+                DispatchQueue.main.async {
+                    self?.updateWindowFrame(animated: true)
+                }
             }
             .store(in: &cancellables)
 
@@ -458,6 +551,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
                 self?.applyAppearance()
+            }
+            .store(in: &cancellables)
+
+        settings.$position
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.updateWindowFrame(animated: true)
             }
             .store(in: &cancellables)
     }
@@ -482,7 +583,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.window?.orderFrontRegardless()
-                self?.monitor.revealPanelTemporarily()
                 self?.monitor.refresh(trigger: .spaceChange)
             }
         }))
@@ -516,34 +616,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func updateWindowFrame(animated: Bool) {
         guard let window else { return }
 
-        let size = panelSize()
+        let requestedSize = panelSize()
         let screen = window.screen ?? anchorScreen() ?? NSScreen.main ?? NSScreen.screens.first
-        let visibleFrame = screen?.visibleFrame ?? CGRect(x: 0, y: 0, width: size.width, height: size.height)
+        let visibleFrame = screen?.visibleFrame ?? CGRect(x: 0, y: 0, width: requestedSize.width, height: requestedSize.height)
 
-        let x: CGFloat
+        let width = min(requestedSize.width, max(220, visibleFrame.width - (FloatingPanelMetrics.horizontalInset * 2)))
+        let height = min(requestedSize.height, max(60, visibleFrame.height - (FloatingPanelMetrics.topInset * 2)))
+
+        let x = visibleFrame.midX - (width / 2)
+        let y: CGFloat
         switch settings.position {
-        case .left:
-            x = visibleFrame.minX + FloatingPanelMetrics.horizontalInset
-        case .right:
-            x = visibleFrame.maxX - FloatingPanelMetrics.horizontalInset - size.width
+        case .top:
+            y = visibleFrame.maxY - FloatingPanelMetrics.topInset - height
+        case .bottom:
+            y = visibleFrame.minY + FloatingPanelMetrics.topInset
         }
-        let y = visibleFrame.midY - (size.height / 2)
-        let frame = NSRect(x: x, y: y, width: size.width, height: size.height)
+        let frame = NSRect(x: x, y: y, width: width, height: height)
 
         if window.frame.integral == frame.integral {
             return
         }
 
-        guard animated else {
-            window.setFrame(frame, display: true)
-            return
-        }
-
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = FloatingPanelMetrics.frameAnimationDuration
-            context.timingFunction = CAMediaTimingFunction(controlPoints: 0.18, 0.9, 0.22, 1.0)
-            window.animator().setFrame(frame, display: true)
-        }
+        // Always set the window frame immediately — no NSAnimationContext.
+        //
+        // Using window.animator().setFrame() alongside SwiftUI’s spring transitions
+        // causes a constraint-update feedback loop:
+        //   NSAnimationContext frame tick → NSHostingView relayout
+        //   → setNeedsUpdateConstraints → another frame tick → …
+        // This overflows AppKit’s per-cycle constraint-pass budget and raises
+        // NSGenericException: “more Update Constraints passes than views”.
+        //
+        // The SwiftUI jelly-spring transition already provides the visual motion;
+        // the window only needs to be at the correct size for the content to render.
+        window.setFrame(frame, display: false)
     }
 
     private func panelSize() -> NSSize {
@@ -554,26 +659,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 height: FloatingPanelMetrics.collapsedHeight
             )
         case .expanded:
-            let bodyHeight: CGFloat
-
-            if monitor.errorMessage != nil || monitor.spaces.isEmpty {
-                bodyHeight = FloatingPanelMetrics.statusHeight
-            } else {
-                let itemCount = CGFloat(monitor.spaces.count)
-                let spacingCount = CGFloat(max(monitor.spaces.count - 1, 0))
-                bodyHeight = (itemCount * FloatingPanelMetrics.itemHeight) + (spacingCount * FloatingPanelMetrics.itemSpacing)
-            }
-
-            let height = max(
-                FloatingPanelMetrics.expandedMinimumHeight,
-                (FloatingPanelMetrics.verticalPadding * 2)
-                    + FloatingPanelMetrics.headerHeight
-                    + FloatingPanelMetrics.footerHeight
-                    + (FloatingPanelMetrics.bodySpacing * 2)
-                    + bodyHeight
+            return NSSize(
+                width: FloatingPanelMetrics.expandedWidth,
+                height: FloatingPanelMetrics.expandedHeight
             )
-
-            return NSSize(width: FloatingPanelMetrics.expandedWidth, height: height)
         }
     }
 
@@ -598,7 +687,7 @@ final class SettingsWindowController: NSWindowController {
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.isReleasedWhenClosed = false
-        window.setContentSize(NSSize(width: 480, height: 420))
+        window.setContentSize(NSSize(width: 560, height: 480))
         window.center()
         super.init(window: window)
         shouldCascadeWindows = false
