@@ -51,8 +51,8 @@ enum AppAppearance: String, CaseIterable, Identifiable {
         }
     }
 
-    static func resolve() -> AppAppearance {
-        if let stored = UserDefaults.standard.string(forKey: AppSettings.Keys.appearance)?.lowercased(),
+    nonisolated static func resolve() -> AppAppearance {
+        if let stored = UserDefaults.standard.string(forKey: "appearance")?.lowercased(),
            let appearance = AppAppearance(rawValue: stored) {
             return appearance
         }
@@ -198,7 +198,7 @@ struct SettingsView: View {
                     Text("Settings")
                         .font(.system(size: 24, weight: .semibold, design: .rounded))
 
-                    Text("Tune how the floating panel behaves and how it starts.")
+                    Text("Tune the floating space switcher position and how it launches.")
                         .font(.system(size: 13, weight: .medium, design: .rounded))
                         .foregroundStyle(.secondary)
                 }
@@ -224,12 +224,13 @@ struct SettingsView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             SettingsRowHeader(
                                 title: "Position",
-                                description: "Choose which side of the current display the panel stays on."
+                                description: "Choose whether the panel stays at the top or bottom of the current screen."
                             )
 
                             Picker("Position", selection: $settings.position) {
-                                Text("Left").tag(FloatingPanelPosition.left)
-                                Text("Right").tag(FloatingPanelPosition.right)
+                                ForEach(FloatingPanelPosition.allCases) { position in
+                                    Text(position.title).tag(position)
+                                }
                             }
                             .pickerStyle(.segmented)
                         }
@@ -311,7 +312,7 @@ struct SettingsView: View {
             }
             .padding(20)
         }
-        .frame(width: 480, height: 420)
+        .frame(width: 480, height: 400)
         .background(Color(nsColor: .windowBackgroundColor))
         .preferredColorScheme(settings.preferredColorScheme)
         .onAppear {
@@ -445,19 +446,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             .store(in: &cancellables)
 
-        settings.$position
-            .removeDuplicates()
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in
-                self?.updateWindowFrame(animated: true)
-            }
-            .store(in: &cancellables)
-
         settings.$appearance
             .removeDuplicates()
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
                 self?.applyAppearance()
+            }
+            .store(in: &cancellables)
+
+        settings.$position
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.updateWindowFrame(animated: true)
             }
             .store(in: &cancellables)
     }
@@ -482,7 +483,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.window?.orderFrontRegardless()
-                self?.monitor.revealPanelTemporarily()
                 self?.monitor.refresh(trigger: .spaceChange)
             }
         }))
@@ -516,34 +516,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func updateWindowFrame(animated: Bool) {
         guard let window else { return }
 
-        let size = panelSize()
+        let requestedSize = panelSize()
         let screen = window.screen ?? anchorScreen() ?? NSScreen.main ?? NSScreen.screens.first
-        let visibleFrame = screen?.visibleFrame ?? CGRect(x: 0, y: 0, width: size.width, height: size.height)
+        let visibleFrame = screen?.visibleFrame ?? CGRect(x: 0, y: 0, width: requestedSize.width, height: requestedSize.height)
 
-        let x: CGFloat
+        let width = min(requestedSize.width, max(220, visibleFrame.width - (FloatingPanelMetrics.horizontalInset * 2)))
+        let height = min(requestedSize.height, max(60, visibleFrame.height - (FloatingPanelMetrics.topInset * 2)))
+
+        let x = visibleFrame.midX - (width / 2)
+        let y: CGFloat
         switch settings.position {
-        case .left:
-            x = visibleFrame.minX + FloatingPanelMetrics.horizontalInset
-        case .right:
-            x = visibleFrame.maxX - FloatingPanelMetrics.horizontalInset - size.width
+        case .top:
+            y = visibleFrame.maxY - FloatingPanelMetrics.topInset - height
+        case .bottom:
+            y = visibleFrame.minY + FloatingPanelMetrics.topInset
         }
-        let y = visibleFrame.midY - (size.height / 2)
-        let frame = NSRect(x: x, y: y, width: size.width, height: size.height)
+        let frame = NSRect(x: x, y: y, width: width, height: height)
 
         if window.frame.integral == frame.integral {
             return
         }
 
-        guard animated else {
-            window.setFrame(frame, display: true)
-            return
-        }
-
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = FloatingPanelMetrics.frameAnimationDuration
-            context.timingFunction = CAMediaTimingFunction(controlPoints: 0.18, 0.9, 0.22, 1.0)
-            window.animator().setFrame(frame, display: true)
-        }
+        // Always set the window frame immediately — no NSAnimationContext.
+        //
+        // Using window.animator().setFrame() alongside SwiftUI’s spring transitions
+        // causes a constraint-update feedback loop:
+        //   NSAnimationContext frame tick → NSHostingView relayout
+        //   → setNeedsUpdateConstraints → another frame tick → …
+        // This overflows AppKit’s per-cycle constraint-pass budget and raises
+        // NSGenericException: “more Update Constraints passes than views”.
+        //
+        // The SwiftUI jelly-spring transition already provides the visual motion;
+        // the window only needs to be at the correct size for the content to render.
+        window.setFrame(frame, display: false)
     }
 
     private func panelSize() -> NSSize {
@@ -554,26 +559,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 height: FloatingPanelMetrics.collapsedHeight
             )
         case .expanded:
-            let bodyHeight: CGFloat
-
-            if monitor.errorMessage != nil || monitor.spaces.isEmpty {
-                bodyHeight = FloatingPanelMetrics.statusHeight
-            } else {
-                let itemCount = CGFloat(monitor.spaces.count)
-                let spacingCount = CGFloat(max(monitor.spaces.count - 1, 0))
-                bodyHeight = (itemCount * FloatingPanelMetrics.itemHeight) + (spacingCount * FloatingPanelMetrics.itemSpacing)
-            }
-
-            let height = max(
-                FloatingPanelMetrics.expandedMinimumHeight,
-                (FloatingPanelMetrics.verticalPadding * 2)
-                    + FloatingPanelMetrics.headerHeight
-                    + FloatingPanelMetrics.footerHeight
-                    + (FloatingPanelMetrics.bodySpacing * 2)
-                    + bodyHeight
+            return NSSize(
+                width: FloatingPanelMetrics.expandedWidth,
+                height: FloatingPanelMetrics.expandedHeight
             )
-
-            return NSSize(width: FloatingPanelMetrics.expandedWidth, height: height)
         }
     }
 

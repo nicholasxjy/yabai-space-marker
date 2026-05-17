@@ -10,6 +10,7 @@
 ### Fixes
 - Fix settings window opening failures by managing the settings window explicitly in AppKit
 - Fix right-side panel drift after expand/collapse transitions
+- Fix a crash when switching macOS spaces caused by repeated AppKit constraint update passes
 
 ## 0.0.3 - 2026-05-16
 

@@ -11,27 +11,26 @@ import AppKit
 import Combine
 
 enum FloatingPanelMetrics {
-    static let expandedWidth: CGFloat = 248
-    static let collapsedWidth: CGFloat = 94
-    static let horizontalInset: CGFloat = 12
+    static let expandedWidth: CGFloat = 620
+    static let collapsedWidth: CGFloat = 248
+    static let horizontalInset: CGFloat = 16
+    static let topInset: CGFloat = 12
 
-    static let expandedMinimumHeight: CGFloat = 152
-    static let headerHeight: CGFloat = 42
-    static let footerHeight: CGFloat = 30
-    static let statusHeight: CGFloat = 68
-    static let itemHeight: CGFloat = 44
-    static let itemSpacing: CGFloat = 6
-    static let bodySpacing: CGFloat = 6
-    static let verticalPadding: CGFloat = 10
+    static let expandedHeight: CGFloat = 112
+    static let collapsedHeight: CGFloat = 60
+    static let panelCornerRadius: CGFloat = 24
 
-    static let collapsedHeight: CGFloat = 128
-    static let collapsedPadding: CGFloat = 9
-    static let collapsedSpacing: CGFloat = 6
-    static let collapsedHeaderHeight: CGFloat = 24
-    static let compactCardHeight: CGFloat = 46
+    static let currentCardWidth: CGFloat = 160
+    static let sliderHeight: CGFloat = 64
+    static let sliderChipHeight: CGFloat = 48
+    static let controlButtonSize: CGFloat = 28
+
+    static let panelPadding: CGFloat = 12
+    static let collapsedHorizontalPadding: CGFloat = 18
+    static let panelSpacing: CGFloat = 10
+    static let sliderSpacing: CGFloat = 8
 
     static let defaultAutoCollapseDelay: TimeInterval = 2.6
-    static let frameAnimationDuration: TimeInterval = 0.36
     static let refreshIntervalInteractive: TimeInterval = 2.0
     static let refreshIntervalCollapsedIdle: TimeInterval = 10.0
     static let refreshIntervalLoading: TimeInterval = 1.25
@@ -43,9 +42,20 @@ enum FloatingPanelMetrics {
     static let queryCommandTimeout: TimeInterval = 1.0
     static let focusCommandTimeout: TimeInterval = 1.5
     static let processTerminationGracePeriod: TimeInterval = 0.12
-    static let panelAnimation = Animation.interactiveSpring(response: 0.38, dampingFraction: 0.74, blendDuration: 0.16)
-    static let contentAnimation = Animation.interactiveSpring(response: 0.28, dampingFraction: 0.78, blendDuration: 0.1)
-    static let fadeAnimation = Animation.easeInOut(duration: 0.18)
+    // Jelly spring — expand: bouncy overshoot from center outward
+    static let jellyExpandAnimation  = Animation.spring(response: 0.54, dampingFraction: 0.62, blendDuration: 0.10)
+    // Jelly spring — collapse: high damping to avoid negative-value overshoot on removal
+    static let jellyCollapseAnimation = Animation.spring(response: 0.38, dampingFraction: 0.82, blendDuration: 0.08)
+    // Panel frame resize — silky spring
+    static let panelAnimation  = Animation.spring(response: 0.50, dampingFraction: 0.68, blendDuration: 0.12)
+    // Inner content cross-fades
+    static let contentAnimation = Animation.spring(response: 0.34, dampingFraction: 0.76, blendDuration: 0.08)
+    // Pure opacity fades
+    static let fadeAnimation   = Animation.easeInOut(duration: 0.22)
+    static let snapAnimation   = Animation.easeInOut(duration: 0.16)
+    static let edgeSnapThreshold: CGFloat = 28
+    static let cornerSnapThreshold: CGFloat = 34
+    static let dragEndDebounce: TimeInterval = 0.14
 }
 
 enum FloatingPanelPresentation: Equatable {
@@ -53,65 +63,49 @@ enum FloatingPanelPresentation: Equatable {
     case expanded
 }
 
-enum FloatingPanelPosition: String {
-    case left
-    case right
+enum FloatingPanelPosition: String, CaseIterable, Identifiable {
+    case top
+    case bottom
 
-    static func resolve() -> FloatingPanelPosition {
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .top:
+            return "Top"
+        case .bottom:
+            return "Bottom"
+        }
+    }
+
+    nonisolated static func resolve() -> FloatingPanelPosition {
         let arguments = ProcessInfo.processInfo.arguments
         if let index = arguments.firstIndex(of: "--position"), arguments.indices.contains(index + 1) {
-            if let position = FloatingPanelPosition(rawValue: arguments[index + 1].lowercased()) {
+            let raw = arguments[index + 1].lowercased()
+            if let position = FloatingPanelPosition(rawValue: raw) {
                 return position
             }
+            if raw == "left" { return .top }
+            if raw == "right" { return .bottom }
         }
 
-        if let environmentValue = ProcessInfo.processInfo.environment["YABAI_SPACE_MARKER_POSITION"]?.lowercased(),
-           let position = FloatingPanelPosition(rawValue: environmentValue) {
-            return position
+        if let environmentValue = ProcessInfo.processInfo.environment["YABAI_SPACE_MARKER_POSITION"]?.lowercased() {
+            if let position = FloatingPanelPosition(rawValue: environmentValue) {
+                return position
+            }
+            if environmentValue == "left" { return .top }
+            if environmentValue == "right" { return .bottom }
         }
 
-        if let defaultsValue = UserDefaults.standard.string(forKey: "position")?.lowercased(),
-           let position = FloatingPanelPosition(rawValue: defaultsValue) {
-            return position
+        if let defaultsValue = UserDefaults.standard.string(forKey: "position")?.lowercased() {
+            if let position = FloatingPanelPosition(rawValue: defaultsValue) {
+                return position
+            }
+            if defaultsValue == "left" { return .top }
+            if defaultsValue == "right" { return .bottom }
         }
 
-        return .left
-    }
-
-    var frameAlignment: Alignment {
-        switch self {
-        case .left:
-            return .topLeading
-        case .right:
-            return .topTrailing
-        }
-    }
-
-    var scaleAnchor: UnitPoint {
-        switch self {
-        case .left:
-            return .leading
-        case .right:
-            return .trailing
-        }
-    }
-
-    var directionMultiplier: CGFloat {
-        switch self {
-        case .left:
-            return 1
-        case .right:
-            return -1
-        }
-    }
-
-    var inwardEdge: Edge {
-        switch self {
-        case .left:
-            return .trailing
-        case .right:
-            return .leading
-        }
+        return .top
     }
 }
 
@@ -119,6 +113,7 @@ struct ContentView: View {
     @Environment(\.colorScheme) private var colorScheme
     @ObservedObject var monitor: YabaiSpacesMonitor
     @ObservedObject var settings: AppSettings
+    @State private var isCollapsedPanelHovering = false
 
     private var theme: FloatingTheme {
         .resolve(for: colorScheme)
@@ -132,20 +127,31 @@ struct ContentView: View {
         monitor.focusedSpace
     }
 
-    private var summaryText: String {
-        if monitor.errorMessage != nil {
-            return "yabai needs attention before spaces can sync."
-        }
-
-        if monitor.isLoading && monitor.spaces.isEmpty {
-            return "Syncing your spaces and preparing quick switching."
-        }
-
+    private var compactTitle: String {
         if let focusedSpace {
-            return "\(monitor.spaces.count) spaces ready. \(focusedSpace.title) is active now."
+            if let label = focusedSpace.label, !label.isEmpty {
+                return "\(label) \(focusedSpace.index)"
+            }
+            return "Space \(focusedSpace.index)"
         }
 
-        return "Keep every workspace one click away from anywhere."
+        if monitor.errorMessage != nil {
+            return "yabai unavailable"
+        }
+
+        return monitor.isLoading ? "syncing spaces" : "space marker"
+    }
+
+    private var compactSubtitle: String {
+        if let focusedSpace {
+            return "Display \(focusedSpace.display)"
+        }
+
+        if monitor.errorMessage != nil {
+            return "Check permissions"
+        }
+
+        return monitor.spaces.isEmpty ? "No spaces" : "Ready"
     }
 
     private var statusBadgeText: String {
@@ -157,60 +163,57 @@ struct ContentView: View {
             return "Syncing"
         }
 
-        return "Live"
+        return focusedSpace == nil ? "Idle" : "Live"
     }
 
-    private var footerText: String {
+    private var headerSummary: String {
         if monitor.errorMessage != nil {
-            return "Check yabai permissions and refresh."
+            return "yabai needs attention"
         }
 
         if monitor.spaces.isEmpty {
-            return monitor.isLoading ? "Looking for active spaces…" : "Open a few spaces to populate the list."
+            return monitor.isLoading ? "Refreshing spaces…" : "No spaces available"
         }
 
-        return "Click any space to focus it instantly."
+        if let focusedSpace {
+            return "\(monitor.spaces.count) spaces · Display \(focusedSpace.display) · Space \(focusedSpace.index)"
+        }
+
+        return "\(monitor.spaces.count) spaces ready"
     }
 
     var body: some View {
-        Group {
-            if isExpanded {
-                expandedPanel
-                    .transition(
-                        .asymmetric(
-                            insertion: .modifier(
-                                active: JellyMorphModifier(opacity: 0.0, xOffset: -18 * settings.position.directionMultiplier, scaleX: 0.92, scaleY: 1.06, blur: 1.4, anchor: settings.position.scaleAnchor),
-                                identity: JellyMorphModifier(opacity: 1.0, xOffset: 0, scaleX: 1.0, scaleY: 1.0, blur: 0, anchor: settings.position.scaleAnchor)
-                            ).animation(FloatingPanelMetrics.fadeAnimation),
-                            removal: .modifier(
-                                active: JellyMorphModifier(opacity: 0.0, xOffset: 8 * settings.position.directionMultiplier, scaleX: 0.98, scaleY: 0.94, blur: 1.2, anchor: settings.position.scaleAnchor),
-                                identity: JellyMorphModifier(opacity: 1.0, xOffset: 0, scaleX: 1.0, scaleY: 1.0, blur: 0, anchor: settings.position.scaleAnchor)
-                            ).animation(FloatingPanelMetrics.fadeAnimation)
-                        )
-                    )
-            } else {
-                collapsedPanel
-                    .transition(
-                        .asymmetric(
-                            insertion: .modifier(
-                                active: JellyMorphModifier(opacity: 0.0, xOffset: 12 * settings.position.directionMultiplier, scaleX: 1.05, scaleY: 0.9, blur: 1.0, anchor: settings.position.scaleAnchor),
-                                identity: JellyMorphModifier(opacity: 1.0, xOffset: 0, scaleX: 1.0, scaleY: 1.0, blur: 0, anchor: settings.position.scaleAnchor)
-                            ).animation(FloatingPanelMetrics.fadeAnimation),
-                            removal: .modifier(
-                                active: JellyMorphModifier(opacity: 0.0, xOffset: -6 * settings.position.directionMultiplier, scaleX: 0.93, scaleY: 1.04, blur: 1.2, anchor: settings.position.scaleAnchor),
-                                identity: JellyMorphModifier(opacity: 1.0, xOffset: 0, scaleX: 1.0, scaleY: 1.0, blur: 0, anchor: settings.position.scaleAnchor)
-                            ).animation(FloatingPanelMetrics.fadeAnimation)
-                        )
-                    )
-            }
+        ZStack {
+            collapsedPanel
+                .opacity(isExpanded ? 0 : 1)
+                .allowsHitTesting(!isExpanded)
+                .accessibilityHidden(isExpanded)
+                .zIndex(isExpanded ? 0 : 1)
+
+            expandedPanel
+                .opacity(isExpanded ? 1 : 0)
+                .allowsHitTesting(isExpanded)
+                .accessibilityHidden(!isExpanded)
+                .zIndex(isExpanded ? 1 : 0)
         }
         .compositingGroup()
-        .frame(width: isExpanded ? FloatingPanelMetrics.expandedWidth : FloatingPanelMetrics.collapsedWidth, alignment: settings.position.frameAlignment)
+        .frame(
+            width: isExpanded ? FloatingPanelMetrics.expandedWidth : FloatingPanelMetrics.collapsedWidth,
+            height: isExpanded ? FloatingPanelMetrics.expandedHeight : FloatingPanelMetrics.collapsedHeight
+        )
         .background(panelBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .onHover { monitor.setPointerInside($0) }
-        .animation(FloatingPanelMetrics.panelAnimation, value: isExpanded)
+        .clipShape(RoundedRectangle(cornerRadius: FloatingPanelMetrics.panelCornerRadius, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: FloatingPanelMetrics.panelCornerRadius, style: .continuous))
+        .onHover {
+            monitor.setPointerInside($0)
+            if !isExpanded {
+                isCollapsedPanelHovering = $0
+            }
+        }
+        // panelAnimation handles implicit property animations (background tint, shadow etc.)
+        // that are NOT the panel expand/collapse transition itself.
+        // The transition is driven by withAnimation inside setPanelPresentation.
+        .animation(FloatingPanelMetrics.panelAnimation, value: isCollapsedPanelHovering)
         .animation(FloatingPanelMetrics.contentAnimation, value: monitor.focusedSpace?.id)
         .contextMenu {
             Button("Settings…") {
@@ -231,273 +234,156 @@ struct ContentView: View {
     }
 
     private var expandedPanel: some View {
-        VStack(alignment: .leading, spacing: FloatingPanelMetrics.bodySpacing) {
-            expandedHeader
-
-            Group {
-                if let errorMessage = monitor.errorMessage {
-                    StateBanner(
-                        title: "Yabai unavailable",
-                        message: errorMessage,
-                        systemImage: "exclamationmark.triangle.fill",
-                        accent: theme.errorAccent,
-                        textColor: theme.errorText,
-                        backgroundColor: theme.errorBackground,
-                        tint: theme.errorAccent,
-                        theme: theme
-                    )
-                    .help(errorMessage)
-                } else if monitor.spaces.isEmpty {
-                    StateBanner(
-                        title: monitor.isLoading ? "Looking for spaces" : "No spaces yet",
-                        message: monitor.isLoading
-                            ? "The marker is checking yabai for the latest workspace state."
-                            : "Create or expose spaces in yabai and they will appear here.",
-                        systemImage: monitor.isLoading ? "arrow.triangle.2.circlepath" : "rectangle.3.group.fill",
-                        accent: theme.accentStart,
-                        textColor: theme.primaryText,
-                        backgroundColor: theme.surfaceWash,
-                        tint: theme.accentGlow,
-                        theme: theme
-                    )
-                } else {
-                    VStack(spacing: FloatingPanelMetrics.itemSpacing) {
-                        ForEach(monitor.spaces) { space in
-                            Button {
-                                monitor.focus(space: space)
-                            } label: {
-                                SpaceRow(space: space, theme: theme)
-                                    .equatable()
-                            }
-                            .buttonStyle(.plain)
-                            .help(space.title)
-                        }
-                    }
-                    .transition(.move(edge: settings.position.inwardEdge).combined(with: .opacity))
-                }
-            }
-
-            expandedFooter
-        }
-        .padding(FloatingPanelMetrics.verticalPadding)
-    }
-
-    private var collapsedPanel: some View {
-        VStack(spacing: FloatingPanelMetrics.collapsedSpacing) {
-            HStack(spacing: 6) {
-                BrandBadge(size: 24, theme: theme)
-
-                Spacer(minLength: 0)
-
-                Circle()
-                    .fill(monitor.errorMessage == nil ? theme.accentStart : theme.errorAccent)
-                    .frame(width: 6, height: 6)
-                    .shadow(
-                        color: (monitor.errorMessage == nil ? theme.accentStart : theme.errorAccent).opacity(theme.statusDotGlowOpacity),
-                        radius: 5,
-                        x: 0,
-                        y: 1
-                    )
-            }
-            .frame(height: FloatingPanelMetrics.collapsedHeaderHeight)
-
-            compactCard
-
-            footerButtons(includeSettings: true, compact: true)
-                .frame(height: FloatingPanelMetrics.footerHeight)
-        }
-        .padding(FloatingPanelMetrics.collapsedPadding)
-    }
-
-    private var compactCard: some View {
-        Button {
-            monitor.revealPanelTemporarily()
-        } label: {
-            VStack(spacing: 2) {
-                if let focusedSpace {
-                    Text("\(focusedSpace.index)")
-                        .font(.system(size: 21, weight: .bold, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundStyle(theme.primaryText)
-
-                    Text(compactCardTitle(for: focusedSpace))
-                        .font(.system(size: 9, weight: .semibold, design: .rounded))
-                        .foregroundStyle(theme.secondaryText)
-                        .lineLimit(1)
-                } else if monitor.isLoading {
-                    Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(theme.primaryText)
-
-                    Text("Sync")
-                        .font(.system(size: 9, weight: .semibold, design: .rounded))
-                        .foregroundStyle(theme.secondaryText)
-                } else {
-                    Image(systemName: "rectangle.3.group.fill")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(theme.primaryText)
-
-                    Text("Spaces")
-                        .font(.system(size: 9, weight: .semibold, design: .rounded))
-                        .foregroundStyle(theme.secondaryText)
-                }
-            }
-            .frame(maxWidth: .infinity, minHeight: FloatingPanelMetrics.compactCardHeight)
-            .background(
-                LiquidGlassSurface(
-                    cornerRadius: 18,
-                    tint: focusedSpace == nil ? theme.neutralTone : theme.focusGlow,
-                    tintStrength: focusedSpace == nil ? 0.09 : 0.18,
-                    fillOpacity: focusedSpace == nil ? 0.18 : 0.24,
-                    highlightOpacity: focusedSpace == nil ? 0.7 : 0.82,
-                    theme: theme
-                )
-            )
-        }
-        .buttonStyle(.plain)
-        .help("Expand space switcher")
-    }
-
-    private func compactCardTitle(for space: YabaiSpace) -> String {
-        let source = space.label?.isEmpty == false ? space.label! : space.title
-        return String(source.prefix(6))
-    }
-
-    private var expandedHeader: some View {
-        HStack(spacing: 10) {
-            BrandBadge(size: 30, theme: theme)
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Space Marker")
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
-                    .foregroundStyle(theme.primaryText)
-
-                Text(summaryText)
-                    .font(.system(size: 10, weight: .medium, design: .rounded))
-                    .foregroundStyle(theme.secondaryText)
-                    .lineLimit(2)
-            }
-
-            Spacer(minLength: 6)
-
-            Text(statusBadgeText)
-                .font(.system(size: 9, weight: .bold, design: .rounded))
-                .foregroundStyle(monitor.errorMessage == nil ? theme.primaryText : theme.errorText)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 5)
-                .background(
-                    LiquidGlassSurface(
-                        cornerRadius: 11,
-                        tint: monitor.errorMessage == nil ? theme.neutralTone : theme.errorAccent,
-                        tintStrength: monitor.errorMessage == nil ? 0.08 : 0.15,
-                        fillOpacity: 0.18,
-                        highlightOpacity: 0.6,
-                        theme: theme
-                    )
-                )
-        }
-        .frame(height: FloatingPanelMetrics.headerHeight)
-    }
-
-    private var expandedFooter: some View {
-        HStack(spacing: 8) {
-            Label {
-                Text(footerText)
-                    .lineLimit(1)
-            } icon: {
-                Image(systemName: monitor.errorMessage == nil ? "sparkles" : "wrench.and.screwdriver.fill")
-            }
-            .font(.system(size: 10, weight: .medium, design: .rounded))
-            .foregroundStyle(theme.tertiaryText)
-
-            Spacer(minLength: 6)
-
-            footerButtons(includeSettings: true)
-        }
-        .frame(height: FloatingPanelMetrics.footerHeight)
-    }
-
-    @ViewBuilder
-    private func footerButtons(includeSettings: Bool, compact: Bool = false) -> some View {
-        HStack(spacing: compact ? 4 : 5) {
-            if includeSettings {
-                Button {
-                    openAppSettings()
-                } label: {
-                    FooterControlButton(
-                        systemImage: "gearshape.fill",
-                        foreground: theme.primaryText,
-                        backgroundTint: theme.neutralTint,
-                        theme: theme,
-                        size: compact ? 22 : 26
-                    )
-                }
-                .buttonStyle(.plain)
-                .help("Open settings")
-            }
-
+        HStack(spacing: FloatingPanelMetrics.panelSpacing) {
             Button {
-                monitor.revealPanelTemporarily()
-                monitor.refresh(trigger: .manual)
+                openAppSettings()
             } label: {
-                FooterControlButton(
-                    systemImage: monitor.isLoading ? "arrow.triangle.2.circlepath.circle.fill" : "arrow.clockwise.circle.fill",
+                PanelActionButton(
+                    systemImage: "slider.horizontal.3",
                     foreground: theme.primaryText,
-                    backgroundTint: theme.neutralTone,
-                    theme: theme,
-                    size: compact ? 22 : 26
+                    tint: theme.neutralTint,
+                    theme: theme
                 )
             }
             .buttonStyle(.plain)
-            .help("Refresh spaces")
+            .help("Open settings")
+
+            CurrentSpaceCard(
+                focusedSpace: focusedSpace,
+                isLoading: monitor.isLoading,
+                hasError: monitor.errorMessage != nil,
+                totalSpaces: monitor.spaces.count,
+                theme: theme
+            )
+            .frame(width: FloatingPanelMetrics.currentCardWidth)
+
+            Group {
+                if let errorMessage = monitor.errorMessage {
+                    StateRailCard(
+                        title: "Yabai unavailable",
+                        message: errorMessage,
+                        systemImage: "exclamationmark.triangle.fill",
+                        tint: theme.errorAccent,
+                        textColor: theme.errorText,
+                        theme: theme
+                    )
+                } else if monitor.spaces.isEmpty {
+                    StateRailCard(
+                        title: monitor.isLoading ? "Refreshing spaces" : "No spaces yet",
+                        message: monitor.isLoading
+                            ? "Trying to fetch the latest workspace state."
+                            : "Create or expose spaces in yabai and they will appear here.",
+                        systemImage: monitor.isLoading ? "arrow.triangle.2.circlepath" : "rectangle.3.group.fill",
+                        tint: theme.accentStart,
+                        textColor: theme.primaryText,
+                        theme: theme
+                    )
+                } else {
+                    SpaceSliderRail(spaces: monitor.spaces, theme: theme) { space in
+                        monitor.focus(space: space)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity)
 
             Button {
                 NSApplication.shared.terminate(nil)
             } label: {
-                FooterControlButton(
-                    systemImage: "power.circle.fill",
+                PanelActionButton(
+                    systemImage: "power",
                     foreground: theme.errorText,
-                    backgroundTint: theme.errorAccent,
-                    theme: theme,
-                    size: compact ? 22 : 26
+                    tint: theme.errorAccent,
+                    theme: theme
                 )
             }
             .buttonStyle(.plain)
             .help("Quit Space Marker")
         }
+        .padding(FloatingPanelMetrics.panelPadding)
+    }
+
+    private var collapsedPanel: some View {
+        HStack(spacing: 10) {
+            Button {
+                openAppSettings()
+            } label: {
+                PanelActionButton(
+                    systemImage: "slider.horizontal.3",
+                    foreground: theme.primaryText,
+                    tint: theme.neutralTint,
+                    theme: theme
+                )
+            }
+            .buttonStyle(.plain)
+            .help("Open settings")
+
+            Spacer(minLength: 0)
+
+            VStack(spacing: 2) {
+                Text(compactTitle)
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(monitor.errorMessage == nil ? theme.primaryText : theme.errorText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+
+                Text(compactSubtitle)
+                    .font(.system(size: 9, weight: .medium, design: .rounded))
+                    .foregroundStyle(theme.secondaryText)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity)
+
+            Spacer(minLength: 0)
+
+            Button {
+                NSApplication.shared.terminate(nil)
+            } label: {
+                PanelActionButton(
+                    systemImage: "power",
+                    foreground: theme.errorText,
+                    tint: theme.errorAccent,
+                    theme: theme
+                )
+            }
+            .buttonStyle(.plain)
+            .help("Quit Space Marker")
+        }
+        .padding(.horizontal, FloatingPanelMetrics.collapsedHorizontalPadding)
+        .padding(.vertical, 10)
     }
 
     private var panelBackground: some View {
-        LiquidGlassSurface(
-            cornerRadius: 24,
-            tint: isExpanded ? theme.neutralTone : theme.neutralTint,
-            tintStrength: isExpanded ? 0.1 : 0.08,
-            fillOpacity: isExpanded ? 0.18 : 0.22,
-            highlightOpacity: isExpanded ? 0.84 : 0.76,
+        let collapsedHovering = !isExpanded && isCollapsedPanelHovering
+
+        return LiquidGlassSurface(
+            cornerRadius: FloatingPanelMetrics.panelCornerRadius,
+            tint: monitor.errorMessage == nil
+                ? (isExpanded ? theme.neutralTone : theme.neutralTint)
+                : theme.errorAccent,
+            tintStrength: monitor.errorMessage == nil
+                ? (isExpanded ? 0.11 : (collapsedHovering ? 0.13 : 0.09))
+                : 0.08,
+            fillOpacity: isExpanded ? 0.16 : (collapsedHovering ? 0.23 : 0.2),
+            highlightOpacity: isExpanded ? 0.78 : (collapsedHovering ? 0.78 : 0.7),
             theme: theme
         )
-        .shadow(color: theme.panelShadow.opacity(isExpanded ? theme.expandedShadowOpacity : theme.collapsedShadowOpacity), radius: isExpanded ? 18 : 12, x: 0, y: isExpanded ? 12 : 8)
-        .shadow(color: theme.focusGlow.opacity(isExpanded ? theme.expandedGlowOpacity : theme.collapsedGlowOpacity), radius: isExpanded ? 12 : 7, x: 0, y: 5)
+        .shadow(
+            color: theme.panelShadow.opacity(isExpanded ? theme.expandedShadowOpacity : (collapsedHovering ? theme.collapsedShadowOpacity + 0.03 : theme.collapsedShadowOpacity)),
+            radius: isExpanded ? 18 : (collapsedHovering ? 15 : 12),
+            x: 0,
+            y: isExpanded ? 12 : (collapsedHovering ? 10 : 8)
+        )
+        .shadow(
+            color: theme.focusGlow.opacity(isExpanded ? theme.expandedGlowOpacity : (collapsedHovering ? theme.collapsedGlowOpacity + 0.04 : theme.collapsedGlowOpacity)),
+            radius: isExpanded ? 14 : (collapsedHovering ? 11 : 8),
+            x: 0,
+            y: 5
+        )
     }
 }
 
-private struct JellyMorphModifier: ViewModifier {
-    let opacity: Double
-    let xOffset: CGFloat
-    let scaleX: CGFloat
-    let scaleY: CGFloat
-    let blur: CGFloat
-    let anchor: UnitPoint
-
-    func body(content: Content) -> some View {
-        content
-            .opacity(opacity)
-            .offset(x: xOffset)
-            .scaleEffect(x: scaleX, y: scaleY, anchor: anchor)
-            .blur(radius: blur)
-    }
-}
-
+/// A ViewModifier that interpolates scale, opacity and blur from a centre anchor.
+/// Must conform to Animatable so SwiftUI can interpolate between `active` and
 private struct FloatingTheme: Equatable {
     let id: Int
     let accentStart: Color
@@ -570,7 +456,7 @@ private struct FloatingTheme: Equatable {
         statusDotGlowOpacity: 0.4,
         expandedShadowOpacity: 0.09,
         collapsedShadowOpacity: 0.05,
-        expandedGlowOpacity: 0.10,
+        expandedGlowOpacity: 0.09,
         collapsedGlowOpacity: 0.05
     )
 
@@ -601,10 +487,10 @@ private struct FloatingTheme: Equatable {
         panelShadow: .black,
         previewBackground: Color(red: 0.08, green: 0.10, blue: 0.14),
         statusDotGlowOpacity: 0.58,
-        expandedShadowOpacity: 0.34,
-        collapsedShadowOpacity: 0.26,
-        expandedGlowOpacity: 0.18,
-        collapsedGlowOpacity: 0.10
+        expandedShadowOpacity: 0.3,
+        collapsedShadowOpacity: 0.22,
+        expandedGlowOpacity: 0.15,
+        collapsedGlowOpacity: 0.08
     )
 }
 
@@ -629,8 +515,8 @@ private struct LiquidGlassSurface: View {
                     LinearGradient(
                         colors: [
                             tint.opacity(tintStrength),
-                            tint.opacity(tintStrength * 0.45),
-                            theme.materialTail.opacity(fillOpacity * 0.16)
+                            tint.opacity(tintStrength * 0.42),
+                            theme.materialTail.opacity(fillOpacity * 0.14)
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -640,72 +526,170 @@ private struct LiquidGlassSurface: View {
             Capsule(style: .continuous)
                 .fill(
                     LinearGradient(
-                        colors: [theme.highlightBase.opacity(highlightOpacity), theme.highlightBase.opacity(0.04)],
+                        colors: [theme.highlightBase.opacity(highlightOpacity), theme.highlightBase.opacity(0.03)],
                         startPoint: .top,
                         endPoint: .bottom
                     )
                 )
-                .frame(height: max(12, cornerRadius * 0.95))
+                .frame(height: max(12, cornerRadius * 0.85))
                 .padding(.horizontal, 6)
                 .padding(.top, 4)
                 .blur(radius: 0.6)
         }
         .overlay(
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .stroke(theme.lineStrong.opacity(0.75), lineWidth: 0.8)
+                .stroke(theme.lineStrong.opacity(0.7), lineWidth: 0.8)
         )
         .overlay(
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .stroke(tint.opacity(tintStrength * 1.6), lineWidth: 0.7)
-                .blur(radius: 0.3)
+                .stroke(tint.opacity(tintStrength * 1.5), lineWidth: 0.65)
+                .blur(radius: 0.25)
         )
     }
 }
 
-private struct BrandBadge: View {
-    let size: CGFloat
+private struct PanelGrabber: View {
     let theme: FloatingTheme
 
     var body: some View {
-        ZStack {
-            LiquidGlassSurface(
-                cornerRadius: size * 0.38,
-                tint: theme.accentStart,
-                tintStrength: 0.22,
-                fillOpacity: 0.22,
-                highlightOpacity: 0.82,
-                theme: theme
+        Capsule(style: .continuous)
+            .fill(theme.lineStrong.opacity(0.92))
+            .frame(width: 42, height: 5)
+            .overlay(
+                Capsule(style: .continuous)
+                    .fill(theme.highlightBase.opacity(0.35))
+                    .blur(radius: 0.4)
             )
-
-            Image(systemName: "command")
-                .font(.system(size: size * 0.36, weight: .bold))
-                .foregroundStyle(theme.primaryText)
-        }
-        .frame(width: size, height: size)
+            .opacity(0.9)
     }
 }
 
-private struct StateBanner: View {
-    let title: String
-    let message: String
-    let systemImage: String
-    let accent: Color
-    let textColor: Color
-    let backgroundColor: Color
-    let tint: Color
+private struct StatusPill: View {
+    let text: String
+    let isError: Bool
     let theme: FloatingTheme
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
+        Text(text)
+            .font(.system(size: 9, weight: .bold, design: .rounded))
+            .foregroundStyle(isError ? theme.errorText : theme.primaryText)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .background(
+                LiquidGlassSurface(
+                    cornerRadius: 12,
+                    tint: isError ? theme.errorAccent : theme.neutralTint,
+                    tintStrength: isError ? 0.15 : 0.08,
+                    fillOpacity: 0.18,
+                    highlightOpacity: 0.62,
+                    theme: theme
+                )
+            )
+    }
+}
+
+private struct CurrentSpaceCard: View {
+    let focusedSpace: YabaiSpace?
+    let isLoading: Bool
+    let hasError: Bool
+    let totalSpaces: Int
+    let theme: FloatingTheme
+
+    private var title: String {
+        if let focusedSpace {
+            return focusedSpace.title
+        }
+        if hasError {
+            return "Needs attention"
+        }
+        return isLoading ? "Syncing spaces" : "Space Marker"
+    }
+
+    private var subtitle: String {
+        if let focusedSpace {
+            return "Display \(focusedSpace.display) · \(totalSpaces) total"
+        }
+        if hasError {
+            return "Check yabai"
+        }
+        return totalSpaces == 0 ? "Waiting for data" : "\(totalSpaces) spaces ready"
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
             ZStack {
                 Circle()
-                    .fill(accent.opacity(0.16))
+                    .fill(
+                        LinearGradient(
+                            colors: [theme.accentGlow.opacity(0.95), theme.accentStart.opacity(0.74)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+
+                if let focusedSpace {
+                    Text("\(focusedSpace.index)")
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(theme.focusDeep)
+                        .contentTransition(.numericText())
+                } else {
+                    Image(systemName: hasError ? "exclamationmark" : (isLoading ? "arrow.triangle.2.circlepath" : "rectangle.3.group.fill"))
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(theme.focusDeep)
+                }
+            }
+            .frame(width: 52, height: 52)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(theme.primaryText)
+                    .lineLimit(1)
+
+                Text(subtitle)
+                    .font(.system(size: 10, weight: .medium, design: .rounded))
+                    .foregroundStyle(theme.secondaryText)
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .background(
+            LiquidGlassSurface(
+                cornerRadius: 22,
+                tint: hasError ? theme.errorAccent : theme.accentStart,
+                tintStrength: hasError ? 0.1 : 0.18,
+                fillOpacity: 0.24,
+                highlightOpacity: 0.84,
+                theme: theme
+            )
+        )
+    }
+}
+
+private struct StateRailCard: View {
+    let title: String
+    let message: String
+    let systemImage: String
+    let tint: Color
+    let textColor: Color
+    let theme: FloatingTheme
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(tint.opacity(0.16))
 
                 Image(systemName: systemImage)
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(accent)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(tint)
             }
-            .frame(width: 30, height: 30)
+            .frame(width: 34, height: 34)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
@@ -714,156 +698,212 @@ private struct StateBanner: View {
 
                 Text(message)
                     .font(.system(size: 10, weight: .medium, design: .rounded))
-                    .foregroundStyle(textColor.opacity(0.72))
-                    .lineLimit(3)
+                    .foregroundStyle(textColor.opacity(0.76))
+                    .lineLimit(2)
             }
 
             Spacer(minLength: 0)
         }
-        .padding(10)
-        .frame(maxWidth: .infinity, minHeight: FloatingPanelMetrics.statusHeight, alignment: .topLeading)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, minHeight: FloatingPanelMetrics.sliderHeight, alignment: .leading)
         .background(
-            ZStack {
-                LiquidGlassSurface(
-                    cornerRadius: 18,
-                    tint: tint,
-                    tintStrength: 0.1,
-                    fillOpacity: 0.18,
-                    highlightOpacity: 0.68,
-                    theme: theme
-                )
-
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(backgroundColor.opacity(0.14))
-            }
+            LiquidGlassSurface(
+                cornerRadius: 22,
+                tint: tint,
+                tintStrength: 0.1,
+                fillOpacity: 0.16,
+                highlightOpacity: 0.66,
+                theme: theme
+            )
         )
     }
 }
 
-private struct FooterControlButton: View {
-    let systemImage: String
-    let foreground: Color
-    let backgroundTint: Color
+private struct SpaceSliderRail: View {
+    let spaces: [YabaiSpace]
     let theme: FloatingTheme
-    let size: CGFloat
+    let focusAction: (YabaiSpace) -> Void
+
+    private var focusedID: Int? {
+        spaces.first(where: \.hasFocus)?.id
+    }
 
     var body: some View {
-        Image(systemName: systemImage)
-            .font(.system(size: size * 0.46, weight: .semibold))
-            .foregroundStyle(foreground)
-            .frame(width: size, height: size)
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: FloatingPanelMetrics.sliderSpacing) {
+                    ForEach(spaces) { space in
+                        Button {
+                            focusAction(space)
+                        } label: {
+                            SpaceChip(space: space, theme: theme)
+                        }
+                        .buttonStyle(.plain)
+                        .id(space.id)
+                    }
+                }
+                .padding(.horizontal, 8)
+            }
+            .frame(maxWidth: .infinity, minHeight: FloatingPanelMetrics.sliderHeight, maxHeight: FloatingPanelMetrics.sliderHeight)
             .background(
                 LiquidGlassSurface(
-                    cornerRadius: size * 0.5,
-                    tint: backgroundTint,
-                    tintStrength: 0.14,
-                    fillOpacity: 0.2,
-                    highlightOpacity: 0.68,
+                    cornerRadius: 24,
+                    tint: theme.neutralTone,
+                    tintStrength: 0.07,
+                    fillOpacity: 0.14,
+                    highlightOpacity: 0.64,
                     theme: theme
                 )
             )
+            .onAppear {
+                scrollToFocused(using: proxy, animated: false)
+            }
+            .onChange(of: focusedID) { _, _ in
+                scrollToFocused(using: proxy, animated: true)
+            }
+        }
+    }
+
+    private func scrollToFocused(using proxy: ScrollViewProxy, animated: Bool) {
+        guard let focusedID else { return }
+
+        if animated {
+            withAnimation(FloatingPanelMetrics.contentAnimation) {
+                proxy.scrollTo(focusedID, anchor: .center)
+            }
+        } else {
+            proxy.scrollTo(focusedID, anchor: .center)
+        }
     }
 }
 
-private struct SpaceRow: View, Equatable {
+private struct SpaceChip: View {
     let space: YabaiSpace
     let theme: FloatingTheme
 
-    private var titleStyle: AnyShapeStyle {
-        AnyShapeStyle(space.hasFocus ? theme.focusText : theme.primaryText)
-    }
-
-    private var subtitleStyle: AnyShapeStyle {
-        AnyShapeStyle(space.hasFocus ? theme.focusText.opacity(0.8) : theme.secondaryText)
-    }
-
-    private var trailingStyle: AnyShapeStyle {
-        AnyShapeStyle(space.hasFocus ? theme.focusText.opacity(0.86) : theme.tertiaryText)
-    }
-
-    private var subtitle: String {
+    private var title: String {
         if let label = space.label, !label.isEmpty {
-            return "Display \(space.display) · Space \(space.index)"
+            return label
         }
-
-        return "Display \(space.display)"
+        return "Space \(space.index)"
     }
 
     var body: some View {
         HStack(spacing: 10) {
             ZStack {
-                LiquidGlassSurface(
-                    cornerRadius: 12,
-                    tint: space.hasFocus ? theme.focusGlow : theme.neutralTint,
-                    tintStrength: space.hasFocus ? 0.34 : 0.08,
-                    fillOpacity: space.hasFocus ? 0.34 : 0.18,
-                    highlightOpacity: space.hasFocus ? 0.9 : 0.68,
-                    theme: theme
-                )
+                Circle()
+                    .fill(space.hasFocus ? theme.focusText.opacity(0.22) : theme.lineSoft.opacity(0.16))
 
                 Text("\(space.index)")
-                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
                     .monospacedDigit()
-                    .foregroundStyle(space.hasFocus ? theme.focusDeep : theme.primaryText)
+                    .foregroundStyle(space.hasFocus ? theme.focusText : theme.primaryText)
                     .contentTransition(.numericText())
             }
-            .frame(width: 34, height: 34)
+            .frame(width: 28, height: 28)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(space.title)
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundStyle(titleStyle)
+                Text(title)
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .foregroundStyle(space.hasFocus ? theme.focusText : theme.primaryText)
                     .lineLimit(1)
 
-                Text(subtitle)
+                Text("Display \(space.display)")
                     .font(.system(size: 9, weight: .medium, design: .rounded))
-                    .foregroundStyle(subtitleStyle)
+                    .foregroundStyle(space.hasFocus ? theme.focusText.opacity(0.82) : theme.secondaryText)
                     .lineLimit(1)
             }
-
-            Spacer(minLength: 6)
 
             if space.hasFocus {
-                Text("Active")
-                    .font(.system(size: 8, weight: .bold, design: .rounded))
-                    .foregroundStyle(theme.focusText)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 4)
-                    .background(
-                        Capsule(style: .continuous)
-                            .fill(theme.focusDeep.opacity(0.36))
-                    )
-            } else {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(trailingStyle)
+                Capsule(style: .continuous)
+                    .fill(theme.focusText.opacity(0.22))
+                    .frame(width: 8, height: 28)
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
-        .frame(maxWidth: .infinity, minHeight: FloatingPanelMetrics.itemHeight, alignment: .leading)
+        .padding(.horizontal, 12)
+        .frame(width: space.hasFocus ? 150 : 126, height: FloatingPanelMetrics.sliderChipHeight, alignment: .leading)
         .background(
             LiquidGlassSurface(
-                cornerRadius: 18,
-                tint: space.hasFocus ? theme.focusTint : theme.neutralTone,
+                cornerRadius: 20,
+                tint: space.hasFocus ? theme.focusTint : theme.neutralTint,
                 tintStrength: space.hasFocus ? 0.32 : 0.07,
-                fillOpacity: space.hasFocus ? 0.28 : 0.15,
-                highlightOpacity: space.hasFocus ? 0.9 : 0.7,
+                fillOpacity: space.hasFocus ? 0.28 : 0.14,
+                highlightOpacity: space.hasFocus ? 0.86 : 0.62,
                 theme: theme
             )
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(space.hasFocus ? theme.focusGlow.opacity(0.95) : theme.lineSoft.opacity(0.28), lineWidth: space.hasFocus ? 1.05 : 0.6)
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(space.hasFocus ? theme.focusGlow.opacity(0.92) : theme.lineSoft.opacity(0.2), lineWidth: space.hasFocus ? 1 : 0.6)
         )
         .shadow(
-            color: (space.hasFocus ? theme.focusTint : Color.black).opacity(space.hasFocus ? 0.24 : 0.03),
-            radius: space.hasFocus ? 14 : 6,
+            color: (space.hasFocus ? theme.focusTint : Color.black).opacity(space.hasFocus ? 0.18 : 0.02),
+            radius: space.hasFocus ? 12 : 6,
             x: 0,
-            y: space.hasFocus ? 8 : 3
+            y: space.hasFocus ? 7 : 3
         )
-        .scaleEffect(space.hasFocus ? 1.02 : 0.985)
+        .scaleEffect(space.hasFocus ? 1.01 : 0.985)
         .animation(FloatingPanelMetrics.contentAnimation, value: space.hasFocus)
+    }
+}
+
+private struct PanelControls: View {
+    let theme: FloatingTheme
+    let isLoading: Bool
+    let openSettings: () -> Void
+    let refresh: () -> Void
+    let quit: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Button(action: openSettings) {
+                PanelActionButton(systemImage: "slider.horizontal.3", foreground: theme.primaryText, tint: theme.neutralTint, theme: theme)
+            }
+            .buttonStyle(.plain)
+            .help("Open settings")
+
+            Button(action: refresh) {
+                PanelActionButton(
+                    systemImage: isLoading ? "arrow.triangle.2.circlepath.circle.fill" : "arrow.clockwise",
+                    foreground: theme.primaryText,
+                    tint: theme.accentStart,
+                    theme: theme
+                )
+            }
+            .buttonStyle(.plain)
+            .help("Refresh spaces")
+
+            Button(action: quit) {
+                PanelActionButton(systemImage: "power", foreground: theme.errorText, tint: theme.errorAccent, theme: theme)
+            }
+            .buttonStyle(.plain)
+            .help("Quit Space Marker")
+        }
+    }
+}
+
+private struct PanelActionButton: View {
+    let systemImage: String
+    let foreground: Color
+    let tint: Color
+    let theme: FloatingTheme
+
+    var body: some View {
+        Image(systemName: systemImage)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(foreground)
+            .frame(width: FloatingPanelMetrics.controlButtonSize, height: FloatingPanelMetrics.controlButtonSize)
+            .background(
+                LiquidGlassSurface(
+                    cornerRadius: FloatingPanelMetrics.controlButtonSize * 0.5,
+                    tint: tint,
+                    tintStrength: 0.14,
+                    fillOpacity: 0.18,
+                    highlightOpacity: 0.68,
+                    theme: theme
+                )
+            )
     }
 }
 
@@ -1101,7 +1141,13 @@ final class YabaiSpacesMonitor: ObservableObject {
 
     private func setPanelPresentation(_ presentation: FloatingPanelPresentation) {
         guard panelPresentation != presentation else { return }
-        withAnimation(FloatingPanelMetrics.panelAnimation) {
+        // Choose the animation based on direction so that:
+        //   expand → bouncy jelly spring (overshoot gives the "burst from centre" feel)
+        //   collapse → tighter spring (snaps back to centre cleanly without overshoot)
+        let animation: Animation = presentation == .expanded
+            ? FloatingPanelMetrics.jellyExpandAnimation
+            : FloatingPanelMetrics.jellyCollapseAnimation
+        withAnimation(animation) {
             panelPresentation = presentation
         }
     }
@@ -1115,9 +1161,10 @@ final class YabaiSpacesMonitor: ObservableObject {
         cancelAutoCollapse()
 
         collapseTask = Task { @MainActor [weak self] in
-            let delay = UInt64(settings.autoCollapseDelay * 1_000_000_000)
+            guard let self else { return }
+            let delay = UInt64(self.settings.autoCollapseDelay * 1_000_000_000)
             try? await Task.sleep(nanoseconds: delay)
-            guard !Task.isCancelled, let self else { return }
+            guard !Task.isCancelled else { return }
             self.setPanelPresentation(.collapsed)
         }
     }
@@ -1306,22 +1353,18 @@ enum YabaiMonitorError: LocalizedError {
 }
 
 struct ContentView_Previews: PreviewProvider {
-    @MainActor private static let leftSettings: AppSettings = {
-        AppSettings(position: .left, autoCollapseDelay: FloatingPanelMetrics.defaultAutoCollapseDelay, refreshLaunchAtLoginStatus: false)
-    }()
-
-    @MainActor private static let rightSettings: AppSettings = {
-        AppSettings(position: .right, autoCollapseDelay: FloatingPanelMetrics.defaultAutoCollapseDelay, refreshLaunchAtLoginStatus: false)
+    @MainActor private static let previewSettings: AppSettings = {
+        AppSettings(position: .top, autoCollapseDelay: FloatingPanelMetrics.defaultAutoCollapseDelay, refreshLaunchAtLoginStatus: false)
     }()
 
     static var previews: some View {
         Group {
-            ContentView(monitor: YabaiSpacesMonitor(settings: leftSettings), settings: leftSettings)
+            ContentView(monitor: YabaiSpacesMonitor(settings: previewSettings), settings: previewSettings)
                 .padding(24)
                 .background(FloatingTheme.light.previewBackground)
                 .preferredColorScheme(.light)
 
-            ContentView(monitor: YabaiSpacesMonitor(settings: rightSettings), settings: rightSettings)
+            ContentView(monitor: YabaiSpacesMonitor(settings: previewSettings), settings: previewSettings)
                 .padding(24)
                 .background(FloatingTheme.dark.previewBackground)
                 .preferredColorScheme(.dark)
