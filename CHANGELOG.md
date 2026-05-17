@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.0.4 - 2026-05-17
+## 0.0.5 - 2026-05-17
 
 ### Features
 - Add a dedicated settings window for panel configuration and app controls
