@@ -30,7 +30,7 @@ enum FloatingPanelMetrics {
     static let collapsedHeaderHeight: CGFloat = 24
     static let compactCardHeight: CGFloat = 46
 
-    static let autoCollapseDelay: TimeInterval = 2.6
+    static let defaultAutoCollapseDelay: TimeInterval = 2.6
     static let frameAnimationDuration: TimeInterval = 0.36
     static let refreshIntervalInteractive: TimeInterval = 2.0
     static let refreshIntervalCollapsedIdle: TimeInterval = 10.0
@@ -53,9 +53,72 @@ enum FloatingPanelPresentation: Equatable {
     case expanded
 }
 
+enum FloatingPanelPosition: String {
+    case left
+    case right
+
+    static func resolve() -> FloatingPanelPosition {
+        let arguments = ProcessInfo.processInfo.arguments
+        if let index = arguments.firstIndex(of: "--position"), arguments.indices.contains(index + 1) {
+            if let position = FloatingPanelPosition(rawValue: arguments[index + 1].lowercased()) {
+                return position
+            }
+        }
+
+        if let environmentValue = ProcessInfo.processInfo.environment["YABAI_SPACE_MARKER_POSITION"]?.lowercased(),
+           let position = FloatingPanelPosition(rawValue: environmentValue) {
+            return position
+        }
+
+        if let defaultsValue = UserDefaults.standard.string(forKey: "position")?.lowercased(),
+           let position = FloatingPanelPosition(rawValue: defaultsValue) {
+            return position
+        }
+
+        return .left
+    }
+
+    var frameAlignment: Alignment {
+        switch self {
+        case .left:
+            return .topLeading
+        case .right:
+            return .topTrailing
+        }
+    }
+
+    var scaleAnchor: UnitPoint {
+        switch self {
+        case .left:
+            return .leading
+        case .right:
+            return .trailing
+        }
+    }
+
+    var directionMultiplier: CGFloat {
+        switch self {
+        case .left:
+            return 1
+        case .right:
+            return -1
+        }
+    }
+
+    var inwardEdge: Edge {
+        switch self {
+        case .left:
+            return .trailing
+        case .right:
+            return .leading
+        }
+    }
+}
+
 struct ContentView: View {
     @Environment(\.colorScheme) private var colorScheme
     @ObservedObject var monitor: YabaiSpacesMonitor
+    @ObservedObject var settings: AppSettings
 
     private var theme: FloatingTheme {
         .resolve(for: colorScheme)
@@ -116,12 +179,12 @@ struct ContentView: View {
                     .transition(
                         .asymmetric(
                             insertion: .modifier(
-                                active: JellyMorphModifier(opacity: 0.0, xOffset: -18, scaleX: 0.92, scaleY: 1.06, blur: 1.4),
-                                identity: JellyMorphModifier(opacity: 1.0, xOffset: 0, scaleX: 1.0, scaleY: 1.0, blur: 0)
+                                active: JellyMorphModifier(opacity: 0.0, xOffset: -18 * settings.position.directionMultiplier, scaleX: 0.92, scaleY: 1.06, blur: 1.4, anchor: settings.position.scaleAnchor),
+                                identity: JellyMorphModifier(opacity: 1.0, xOffset: 0, scaleX: 1.0, scaleY: 1.0, blur: 0, anchor: settings.position.scaleAnchor)
                             ).animation(FloatingPanelMetrics.fadeAnimation),
                             removal: .modifier(
-                                active: JellyMorphModifier(opacity: 0.0, xOffset: 8, scaleX: 0.98, scaleY: 0.94, blur: 1.2),
-                                identity: JellyMorphModifier(opacity: 1.0, xOffset: 0, scaleX: 1.0, scaleY: 1.0, blur: 0)
+                                active: JellyMorphModifier(opacity: 0.0, xOffset: 8 * settings.position.directionMultiplier, scaleX: 0.98, scaleY: 0.94, blur: 1.2, anchor: settings.position.scaleAnchor),
+                                identity: JellyMorphModifier(opacity: 1.0, xOffset: 0, scaleX: 1.0, scaleY: 1.0, blur: 0, anchor: settings.position.scaleAnchor)
                             ).animation(FloatingPanelMetrics.fadeAnimation)
                         )
                     )
@@ -130,19 +193,19 @@ struct ContentView: View {
                     .transition(
                         .asymmetric(
                             insertion: .modifier(
-                                active: JellyMorphModifier(opacity: 0.0, xOffset: 12, scaleX: 1.05, scaleY: 0.9, blur: 1.0),
-                                identity: JellyMorphModifier(opacity: 1.0, xOffset: 0, scaleX: 1.0, scaleY: 1.0, blur: 0)
+                                active: JellyMorphModifier(opacity: 0.0, xOffset: 12 * settings.position.directionMultiplier, scaleX: 1.05, scaleY: 0.9, blur: 1.0, anchor: settings.position.scaleAnchor),
+                                identity: JellyMorphModifier(opacity: 1.0, xOffset: 0, scaleX: 1.0, scaleY: 1.0, blur: 0, anchor: settings.position.scaleAnchor)
                             ).animation(FloatingPanelMetrics.fadeAnimation),
                             removal: .modifier(
-                                active: JellyMorphModifier(opacity: 0.0, xOffset: -6, scaleX: 0.93, scaleY: 1.04, blur: 1.2),
-                                identity: JellyMorphModifier(opacity: 1.0, xOffset: 0, scaleX: 1.0, scaleY: 1.0, blur: 0)
+                                active: JellyMorphModifier(opacity: 0.0, xOffset: -6 * settings.position.directionMultiplier, scaleX: 0.93, scaleY: 1.04, blur: 1.2, anchor: settings.position.scaleAnchor),
+                                identity: JellyMorphModifier(opacity: 1.0, xOffset: 0, scaleX: 1.0, scaleY: 1.0, blur: 0, anchor: settings.position.scaleAnchor)
                             ).animation(FloatingPanelMetrics.fadeAnimation)
                         )
                     )
             }
         }
         .compositingGroup()
-        .frame(width: isExpanded ? FloatingPanelMetrics.expandedWidth : FloatingPanelMetrics.collapsedWidth, alignment: .topLeading)
+        .frame(width: isExpanded ? FloatingPanelMetrics.expandedWidth : FloatingPanelMetrics.collapsedWidth, alignment: settings.position.frameAlignment)
         .background(panelBackground)
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
@@ -150,6 +213,10 @@ struct ContentView: View {
         .animation(FloatingPanelMetrics.panelAnimation, value: isExpanded)
         .animation(FloatingPanelMetrics.contentAnimation, value: monitor.focusedSpace?.id)
         .contextMenu {
+            Button("Settings…") {
+                openAppSettings()
+            }
+
             Button("Refresh") {
                 monitor.refresh(trigger: .manual)
             }
@@ -160,6 +227,7 @@ struct ContentView: View {
                 NSApplication.shared.terminate(nil)
             }
         }
+        .preferredColorScheme(settings.preferredColorScheme)
     }
 
     private var expandedPanel: some View {
@@ -205,7 +273,7 @@ struct ContentView: View {
                             .help(space.title)
                         }
                     }
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
+                    .transition(.move(edge: settings.position.inwardEdge).combined(with: .opacity))
                 }
             }
 
@@ -235,7 +303,7 @@ struct ContentView: View {
 
             compactCard
 
-            footerButtons
+            footerButtons(includeSettings: true, compact: true)
                 .frame(height: FloatingPanelMetrics.footerHeight)
         }
         .padding(FloatingPanelMetrics.collapsedPadding)
@@ -344,13 +412,30 @@ struct ContentView: View {
 
             Spacer(minLength: 6)
 
-            footerButtons
+            footerButtons(includeSettings: true)
         }
         .frame(height: FloatingPanelMetrics.footerHeight)
     }
 
-    private var footerButtons: some View {
-        HStack(spacing: 5) {
+    @ViewBuilder
+    private func footerButtons(includeSettings: Bool, compact: Bool = false) -> some View {
+        HStack(spacing: compact ? 4 : 5) {
+            if includeSettings {
+                Button {
+                    openAppSettings()
+                } label: {
+                    FooterControlButton(
+                        systemImage: "gearshape.fill",
+                        foreground: theme.primaryText,
+                        backgroundTint: theme.neutralTint,
+                        theme: theme,
+                        size: compact ? 22 : 26
+                    )
+                }
+                .buttonStyle(.plain)
+                .help("Open settings")
+            }
+
             Button {
                 monitor.revealPanelTemporarily()
                 monitor.refresh(trigger: .manual)
@@ -359,7 +444,8 @@ struct ContentView: View {
                     systemImage: monitor.isLoading ? "arrow.triangle.2.circlepath.circle.fill" : "arrow.clockwise.circle.fill",
                     foreground: theme.primaryText,
                     backgroundTint: theme.neutralTone,
-                    theme: theme
+                    theme: theme,
+                    size: compact ? 22 : 26
                 )
             }
             .buttonStyle(.plain)
@@ -372,7 +458,8 @@ struct ContentView: View {
                     systemImage: "power.circle.fill",
                     foreground: theme.errorText,
                     backgroundTint: theme.errorAccent,
-                    theme: theme
+                    theme: theme,
+                    size: compact ? 22 : 26
                 )
             }
             .buttonStyle(.plain)
@@ -400,12 +487,13 @@ private struct JellyMorphModifier: ViewModifier {
     let scaleX: CGFloat
     let scaleY: CGFloat
     let blur: CGFloat
+    let anchor: UnitPoint
 
     func body(content: Content) -> some View {
         content
             .opacity(opacity)
             .offset(x: xOffset)
-            .scaleEffect(x: scaleX, y: scaleY, anchor: .leading)
+            .scaleEffect(x: scaleX, y: scaleY, anchor: anchor)
             .blur(radius: blur)
     }
 }
@@ -657,15 +745,16 @@ private struct FooterControlButton: View {
     let foreground: Color
     let backgroundTint: Color
     let theme: FloatingTheme
+    let size: CGFloat
 
     var body: some View {
         Image(systemName: systemImage)
-            .font(.system(size: 12, weight: .semibold))
+            .font(.system(size: size * 0.46, weight: .semibold))
             .foregroundStyle(foreground)
-            .frame(width: 26, height: 26)
+            .frame(width: size, height: size)
             .background(
                 LiquidGlassSurface(
-                    cornerRadius: 13,
+                    cornerRadius: size * 0.5,
                     tint: backgroundTint,
                     tintStrength: 0.14,
                     fillOpacity: 0.2,
@@ -833,9 +922,20 @@ final class YabaiSpacesMonitor: ObservableObject {
     nonisolated private static let focusTimeout: TimeInterval = 1.5
     nonisolated private static let terminationGracePeriod: TimeInterval = 0.12
 
-    init() {
+    private let settings: AppSettings
+    private var cancellables = Set<AnyCancellable>()
+
+    init(settings: AppSettings) {
+        self.settings = settings
         self.executableURL = Self.resolveExecutableURL()
         self.panelPresentation = .collapsed
+
+        settings.$autoCollapseDelay
+            .removeDuplicates()
+            .sink { [weak self] _ in
+                self?.handleAutoCollapseDelayChanged()
+            }
+            .store(in: &cancellables)
     }
 
     deinit {
@@ -1015,7 +1115,7 @@ final class YabaiSpacesMonitor: ObservableObject {
         cancelAutoCollapse()
 
         collapseTask = Task { @MainActor [weak self] in
-            let delay = UInt64(FloatingPanelMetrics.autoCollapseDelay * 1_000_000_000)
+            let delay = UInt64(settings.autoCollapseDelay * 1_000_000_000)
             try? await Task.sleep(nanoseconds: delay)
             guard !Task.isCancelled, let self else { return }
             self.setPanelPresentation(.collapsed)
@@ -1025,6 +1125,11 @@ final class YabaiSpacesMonitor: ObservableObject {
     private func cancelAutoCollapse() {
         collapseTask?.cancel()
         collapseTask = nil
+    }
+
+    private func handleAutoCollapseDelayChanged() {
+        guard panelPresentation == .expanded else { return }
+        scheduleAutoCollapseIfNeeded()
     }
 
     private func scheduleDeferredRefresh(for trigger: RefreshTrigger) {
@@ -1201,14 +1306,22 @@ enum YabaiMonitorError: LocalizedError {
 }
 
 struct ContentView_Previews: PreviewProvider {
+    @MainActor private static let leftSettings: AppSettings = {
+        AppSettings(position: .left, autoCollapseDelay: FloatingPanelMetrics.defaultAutoCollapseDelay, refreshLaunchAtLoginStatus: false)
+    }()
+
+    @MainActor private static let rightSettings: AppSettings = {
+        AppSettings(position: .right, autoCollapseDelay: FloatingPanelMetrics.defaultAutoCollapseDelay, refreshLaunchAtLoginStatus: false)
+    }()
+
     static var previews: some View {
         Group {
-            ContentView(monitor: YabaiSpacesMonitor())
+            ContentView(monitor: YabaiSpacesMonitor(settings: leftSettings), settings: leftSettings)
                 .padding(24)
                 .background(FloatingTheme.light.previewBackground)
                 .preferredColorScheme(.light)
 
-            ContentView(monitor: YabaiSpacesMonitor())
+            ContentView(monitor: YabaiSpacesMonitor(settings: rightSettings), settings: rightSettings)
                 .padding(24)
                 .background(FloatingTheme.dark.previewBackground)
                 .preferredColorScheme(.dark)
