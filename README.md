@@ -8,13 +8,13 @@ The current UI uses a compact liquid-glass style with expand/collapse behavior, 
 
 ## Features
 
-- Floating panel anchored on the left side of the screen
+- Floating panel anchored on the left or right side of the screen
 - Shows the current display's spaces
 - Highlights the currently focused space
 - Click any space to focus it immediately
 - Expands on space changes, then auto-collapses
 - Compact liquid-glass UI
-- Automatically adapts to macOS light and dark appearance
+- Supports system / light / dark appearance modes
 - Adaptive refresh scheduling to reduce idle CPU usage while keeping interactions responsive
 - Hover-aware interactive refresh: high-frequency polling is only used while the panel is expanded or actively hovered
 - Command timeout protection for `yabai` queries/focus calls to avoid stuck subprocesses consuming resources
@@ -23,7 +23,8 @@ The current UI uses a compact liquid-glass style with expand/collapse behavior, 
 - `yabai` subprocess timeout waiting uses event-driven completion instead of a spin/sleep polling loop
 - Coalesced window/layout updates for smoother animations and less redundant work
 - Right-click menu with Refresh and Quit actions
-- Footer controls for Refresh and Quit
+- Footer controls for Settings, Refresh, and Quit
+- Built-in settings page for appearance mode, panel position, auto-collapse timeout, and launch at login
 
 ## How it works
 
@@ -33,6 +34,41 @@ The app does not manage spaces directly. It shells out to the `yabai` CLI:
 - Focus a space: `yabai -m space --focus <index>`
 
 The app refreshes space state with adaptive scheduling instead of a constant high-frequency polling loop. It only uses high-frequency refresh while the panel is expanded or the pointer is actively hovering over it, and it adds timeout protection around `yabai` subprocesses so hung commands do not keep consuming resources.
+
+### Panel position
+
+The panel supports two positions:
+
+- `left` (default)
+- `right`
+
+You can configure it in any of these ways:
+
+```bash
+# launch argument
+open build-signed/Build/Products/Debug/yabai-space-marker.app --args --position right
+
+# or environment variable
+export YABAI_SPACE_MARKER_POSITION=right
+```
+
+You can also persist the setting with macOS defaults:
+
+```bash
+defaults write com.nicocolab.yabai-space-marker position -string right
+```
+
+If no position is configured, the panel stays on the left.
+
+### Settings page
+
+Open the app settings to configure:
+
+- appearance mode (`system` / `light` / `dark`)
+- panel position (`left` / `right`)
+- auto-collapse timeout
+- launch at login
+- quit the app
 
 The panel temporarily expands in these cases:
 
@@ -122,12 +158,13 @@ build-signed/Build/Products/Debug/yabai-space-marker.app
 
 ## Appearance
 
-The panel automatically follows the current macOS appearance.
+The panel supports three appearance modes:
 
+- **System**: follows the current macOS appearance automatically
 - **Light mode**: bright frosted-glass surface with subtle blue accents
 - **Dark mode**: darker glass treatment with elevated contrast, softer borders, and tuned glow/shadow balance
 
-No separate toggle is required — changing the system appearance updates the panel theme automatically.
+You can switch appearance directly from the settings page.
 
 ## UI model
 
