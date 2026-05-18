@@ -114,6 +114,8 @@ struct ContentView: View {
     @ObservedObject var monitor: YabaiSpacesMonitor
     @ObservedObject var settings: AppSettings
     @State private var isCollapsedPanelHovering = false
+    @State private var collapsedDragStartFrame: CGRect?
+    @State private var collapsedDragStartMouseLocation: CGPoint?
 
     private var theme: FloatingTheme {
         .resolve(for: colorScheme)
@@ -196,13 +198,26 @@ struct ContentView: View {
         )
         .background(panelBackground)
         .clipShape(RoundedRectangle(cornerRadius: FloatingPanelMetrics.panelCornerRadius, style: .continuous))
+        .overlay(collapsedDragHoverOverlay)
         .contentShape(RoundedRectangle(cornerRadius: FloatingPanelMetrics.panelCornerRadius, style: .continuous))
         .onHover {
             monitor.setPointerInside($0)
             if !isExpanded {
                 isCollapsedPanelHovering = $0
+            } else {
+                isCollapsedPanelHovering = false
             }
         }
+        .onChange(of: isExpanded) { _, expanded in
+            if expanded {
+                isCollapsedPanelHovering = false
+                resetCollapsedPanelDrag()
+            }
+        }
+        .onDisappear {
+            resetCollapsedPanelDrag()
+        }
+        .simultaneousGesture(collapsedPanelDragGesture)
         // panelAnimation handles implicit property animations (background tint, shadow etc.)
         // that are NOT the panel expand/collapse transition itself.
         // The transition is driven by withAnimation inside setPanelPresentation.
@@ -223,6 +238,82 @@ struct ContentView: View {
             }
         }
         .preferredColorScheme(settings.preferredColorScheme)
+    }
+
+    private var collapsedPanelDragGesture: some Gesture {
+        DragGesture(minimumDistance: 4)
+            .onChanged { _ in
+                guard !isExpanded else { return }
+
+                if collapsedDragStartFrame == nil || collapsedDragStartMouseLocation == nil {
+                    guard isCollapsedPanelHovering else { return }
+                    collapsedDragStartFrame = AppDelegate.shared?.currentPanelFrame()
+                    collapsedDragStartMouseLocation = NSEvent.mouseLocation
+                }
+
+                guard
+                    let startFrame = collapsedDragStartFrame,
+                    let startMouseLocation = collapsedDragStartMouseLocation
+                else {
+                    return
+                }
+
+                let currentMouseLocation = NSEvent.mouseLocation
+                let translation = CGSize(
+                    width: currentMouseLocation.x - startMouseLocation.x,
+                    height: currentMouseLocation.y - startMouseLocation.y
+                )
+                AppDelegate.shared?.dragCollapsedPanel(from: startFrame, translation: translation)
+            }
+            .onEnded { _ in
+                defer { resetCollapsedPanelDrag() }
+                guard
+                    !isExpanded,
+                    let startFrame = collapsedDragStartFrame,
+                    let startMouseLocation = collapsedDragStartMouseLocation
+                else {
+                    return
+                }
+
+                let currentMouseLocation = NSEvent.mouseLocation
+                let translation = CGSize(
+                    width: currentMouseLocation.x - startMouseLocation.x,
+                    height: currentMouseLocation.y - startMouseLocation.y
+                )
+                AppDelegate.shared?.finishDraggingCollapsedPanel(from: startFrame, translation: translation)
+            }
+    }
+
+    private func resetCollapsedPanelDrag() {
+        collapsedDragStartFrame = nil
+        collapsedDragStartMouseLocation = nil
+    }
+
+    @ViewBuilder
+    private var collapsedDragHoverOverlay: some View {
+        if !isExpanded && isCollapsedPanelHovering {
+            RoundedRectangle(cornerRadius: FloatingPanelMetrics.panelCornerRadius, style: .continuous)
+                .stroke(theme.accentEnd.opacity(0.34), lineWidth: 1)
+                .shadow(color: theme.accentGlow.opacity(0.22), radius: 14, x: 0, y: 0)
+                .shadow(color: theme.accentStart.opacity(0.14), radius: 24, x: 0, y: 0)
+                .overlay(alignment: .bottom) {
+                    Capsule(style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    theme.highlightBase.opacity(0.92),
+                                    theme.accentEnd.opacity(0.88)
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(width: 42, height: 4)
+                        .shadow(color: theme.accentGlow.opacity(0.28), radius: 8, x: 0, y: 0)
+                        .padding(.bottom, 8)
+                }
+                .allowsHitTesting(false)
+        }
     }
 
     private var expandedPanel: some View {
