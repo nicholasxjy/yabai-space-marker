@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.0.6 - 2026-05-18
+
+### Features
+- Add dragging for the collapsed panel so it can be repositioned directly
+
+### Fixes
+- Improve collapsed-panel dragging reliability by tracking mouse movement in global screen coordinates
+- Polish the collapsed-panel hover state with a clearer draggable affordance
+- Update README for the latest panel interaction behavior
+
 ## 0.0.5 - 2026-05-17
 
 ### Features
