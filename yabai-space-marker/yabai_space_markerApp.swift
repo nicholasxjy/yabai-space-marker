@@ -469,6 +469,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var settingsWindowController: SettingsWindowController?
     private var cancellables = Set<AnyCancellable>()
     private var observers: [(center: NotificationCenter, token: NSObjectProtocol)] = []
+    private var manualPanelCenter: CGPoint?
+    private var isApplyingManagedWindowFrame = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Self.shared = self
@@ -558,6 +560,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .removeDuplicates()
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
+                self?.manualPanelCenter = nil
                 self?.updateWindowFrame(animated: true)
             }
             .store(in: &cancellables)
@@ -606,6 +609,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.monitor.resumeRefreshing()
             }
         }))
+
+        if let window {
+            observers.append((defaultCenter, defaultCenter.addObserver(
+                forName: NSWindow.didMoveNotification,
+                object: window,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.handleWindowDidMove()
+                }
+            }))
+        }
     }
 
     private func applyAppearance() {
@@ -613,42 +628,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settingsWindowController?.applyAppearance(settings.windowAppearance)
     }
 
+    func currentPanelFrame() -> CGRect? {
+        window?.frame
+    }
+
+    func dragCollapsedPanel(from startFrame: CGRect, translation: CGSize) {
+        guard let window else { return }
+
+        let proposedFrame = startFrame.offsetBy(dx: translation.width, dy: translation.height)
+        let resolvedFrame = clampedFrame(for: proposedFrame, preferredScreen: screen(containing: proposedFrame.center) ?? window.screen)
+
+        manualPanelCenter = resolvedFrame.center
+        applyWindowFrame(resolvedFrame)
+    }
+
+    func finishDraggingCollapsedPanel(from startFrame: CGRect, translation: CGSize) {
+        dragCollapsedPanel(from: startFrame, translation: translation)
+    }
+
     private func updateWindowFrame(animated: Bool) {
         guard let window else { return }
 
         let requestedSize = panelSize()
-        let screen = window.screen ?? anchorScreen() ?? NSScreen.main ?? NSScreen.screens.first
-        let visibleFrame = screen?.visibleFrame ?? CGRect(x: 0, y: 0, width: requestedSize.width, height: requestedSize.height)
-
-        let width = min(requestedSize.width, max(220, visibleFrame.width - (FloatingPanelMetrics.horizontalInset * 2)))
-        let height = min(requestedSize.height, max(60, visibleFrame.height - (FloatingPanelMetrics.topInset * 2)))
-
-        let x = visibleFrame.midX - (width / 2)
-        let y: CGFloat
-        switch settings.position {
-        case .top:
-            y = visibleFrame.maxY - FloatingPanelMetrics.topInset - height
-        case .bottom:
-            y = visibleFrame.minY + FloatingPanelMetrics.topInset
-        }
-        let frame = NSRect(x: x, y: y, width: width, height: height)
+        let frame = resolvedWindowFrame(for: requestedSize, fallbackScreen: window.screen)
 
         if window.frame.integral == frame.integral {
             return
         }
 
-        // Always set the window frame immediately — no NSAnimationContext.
-        //
-        // Using window.animator().setFrame() alongside SwiftUI’s spring transitions
-        // causes a constraint-update feedback loop:
-        //   NSAnimationContext frame tick → NSHostingView relayout
-        //   → setNeedsUpdateConstraints → another frame tick → …
-        // This overflows AppKit’s per-cycle constraint-pass budget and raises
-        // NSGenericException: “more Update Constraints passes than views”.
-        //
-        // The SwiftUI jelly-spring transition already provides the visual motion;
-        // the window only needs to be at the correct size for the content to render.
-        window.setFrame(frame, display: false)
+        applyWindowFrame(frame)
     }
 
     private func panelSize() -> NSSize {
@@ -666,9 +674,92 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    private func resolvedWindowFrame(for requestedSize: NSSize, fallbackScreen: NSScreen?) -> CGRect {
+        let screen = fallbackScreen ?? screen(containing: manualPanelCenter) ?? anchorScreen() ?? NSScreen.main ?? NSScreen.screens.first
+        let visibleFrame = screen?.visibleFrame ?? CGRect(x: 0, y: 0, width: requestedSize.width, height: requestedSize.height)
+
+        let width = min(requestedSize.width, max(220, visibleFrame.width - (FloatingPanelMetrics.horizontalInset * 2)))
+        let height = min(requestedSize.height, max(60, visibleFrame.height - (FloatingPanelMetrics.topInset * 2)))
+        let size = CGSize(width: width, height: height)
+
+        if let manualPanelCenter {
+            let manualOrigin = CGPoint(x: manualPanelCenter.x - (size.width / 2), y: manualPanelCenter.y - (size.height / 2))
+            let manualFrame = CGRect(origin: manualOrigin, size: size)
+            let clamped = clampedFrame(for: manualFrame, preferredScreen: screen)
+            self.manualPanelCenter = clamped.center
+            return clamped
+        }
+
+        let x = visibleFrame.midX - (width / 2)
+        let y: CGFloat
+        switch settings.position {
+        case .top:
+            y = visibleFrame.maxY - FloatingPanelMetrics.topInset - height
+        case .bottom:
+            y = visibleFrame.minY + FloatingPanelMetrics.topInset
+        }
+        return CGRect(x: x, y: y, width: width, height: height)
+    }
+
+    private func clampedFrame(for frame: CGRect, preferredScreen: NSScreen?) -> CGRect {
+        let screen = preferredScreen ?? screen(containing: frame.center) ?? anchorScreen() ?? NSScreen.main ?? NSScreen.screens.first
+        let visibleFrame = screen?.visibleFrame ?? frame
+
+        let minX = visibleFrame.minX + FloatingPanelMetrics.horizontalInset
+        let maxX = visibleFrame.maxX - FloatingPanelMetrics.horizontalInset - frame.width
+        let minY = visibleFrame.minY + FloatingPanelMetrics.topInset
+        let maxY = visibleFrame.maxY - FloatingPanelMetrics.topInset - frame.height
+
+        let clampedX = min(max(frame.origin.x, minX), max(minX, maxX))
+        let clampedY = min(max(frame.origin.y, minY), max(minY, maxY))
+
+        return CGRect(x: clampedX, y: clampedY, width: frame.width, height: frame.height)
+    }
+
+    private func applyWindowFrame(_ frame: CGRect) {
+        guard let window else { return }
+
+        // Always set the window frame immediately — no NSAnimationContext.
+        //
+        // Using window.animator().setFrame() alongside SwiftUI’s spring transitions
+        // causes a constraint-update feedback loop:
+        //   NSAnimationContext frame tick → NSHostingView relayout
+        //   → setNeedsUpdateConstraints → another frame tick → …
+        // This overflows AppKit’s per-cycle constraint-pass budget and raises
+        // NSGenericException: “more Update Constraints passes than views”.
+        //
+        // The SwiftUI jelly-spring transition already provides the visual motion;
+        // the window only needs to be at the correct size for the content to render.
+        isApplyingManagedWindowFrame = true
+        window.setFrame(frame, display: false)
+        isApplyingManagedWindowFrame = false
+    }
+
+    private func handleWindowDidMove() {
+        guard let window, !isApplyingManagedWindowFrame else { return }
+
+        let clampedFrame = clampedFrame(for: window.frame, preferredScreen: window.screen)
+        manualPanelCenter = clampedFrame.center
+
+        if clampedFrame.integral != window.frame.integral {
+            applyWindowFrame(clampedFrame)
+        }
+    }
+
     private func anchorScreen() -> NSScreen? {
         let mouseLocation = NSEvent.mouseLocation
         return NSScreen.screens.first { NSMouseInRect(mouseLocation, $0.frame, false) }
+    }
+
+    private func screen(containing point: CGPoint?) -> NSScreen? {
+        guard let point else { return nil }
+        return NSScreen.screens.first { $0.visibleFrame.insetBy(dx: -1, dy: -1).contains(point) }
+    }
+}
+
+private extension CGRect {
+    var center: CGPoint {
+        CGPoint(x: midX, y: midY)
     }
 }
 
