@@ -1,0 +1,173 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1856" height="720" viewBox="0 0 1856 720" role="img" aria-labelledby="title desc">
+  <title id="title">Yabai Space notch-safe menu bar design review</title>
+  <desc id="desc">A macOS menu bar mockup showing a notch-safe yabai space indicator and switcher that avoid the camera housing.</desc>
+  <defs>
+    <linearGradient id="wallpaper" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#101724"/>
+      <stop offset="0.45" stop-color="#263248"/>
+      <stop offset="1" stop-color="#182235"/>
+    </linearGradient>
+    <linearGradient id="menu" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#11151d" stop-opacity="0.88"/>
+      <stop offset="1" stop-color="#151b26" stop-opacity="0.76"/>
+    </linearGradient>
+    <linearGradient id="activeBadge" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6ee7ff"/>
+      <stop offset="0.48" stop-color="#8b8cff"/>
+      <stop offset="1" stop-color="#ff76c7"/>
+    </linearGradient>
+    <linearGradient id="edgeLine" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#58d7ff" stop-opacity="0"/>
+      <stop offset="0.22" stop-color="#58d7ff"/>
+      <stop offset="0.55" stop-color="#9d8cff"/>
+      <stop offset="0.82" stop-color="#ffca5e"/>
+      <stop offset="1" stop-color="#ffca5e" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="softShadow" x="-30%" y="-40%" width="160%" height="200%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#000000" flood-opacity="0.34"/>
+    </filter>
+    <filter id="subtleGlow" x="-40%" y="-60%" width="180%" height="220%">
+      <feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="#70d6ff" flood-opacity="0.30"/>
+    </filter>
+    <style>
+      .sf { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Arial, sans-serif; }
+      .mono { font-family: "SF Mono", ui-monospace, Menlo, Monaco, Consolas, monospace; }
+      .small { font-size: 18px; }
+      .caption { font-size: 20px; fill: #aeb8c8; }
+      .label { font-size: 22px; fill: #dce5f4; font-weight: 650; }
+      .heading { font-size: 34px; fill: #f3f7ff; font-weight: 760; letter-spacing: 0; }
+      .callout { font-size: 21px; fill: #d2d9e8; font-weight: 560; }
+      .muted { fill: #7f8aa0; }
+      .line { stroke: #6b7588; stroke-width: 1.2; stroke-dasharray: 7 7; opacity: 0.66; }
+    </style>
+  </defs>
+
+  <rect width="1856" height="720" fill="url(#wallpaper)"/>
+  <g opacity="0.32">
+    <circle cx="86" cy="48" r="2" fill="#9ab7dc"/>
+    <circle cx="348" cy="32" r="2.3" fill="#b5c7e6"/>
+    <circle cx="614" cy="70" r="1.8" fill="#d8e4ff"/>
+    <circle cx="1560" cy="36" r="2" fill="#91a8c7"/>
+    <circle cx="1734" cy="84" r="2.2" fill="#c0d2ee"/>
+    <path d="M0 133 C 280 150, 484 108, 768 126 S 1352 148, 1856 112" fill="none" stroke="#8db1d6" stroke-width="2" opacity="0.42"/>
+    <path d="M0 158 C 394 132, 610 164, 928 146 S 1488 126, 1856 156" fill="none" stroke="#627b9c" stroke-width="1.4" opacity="0.34"/>
+  </g>
+
+  <rect x="0" y="0" width="1856" height="74" fill="url(#menu)"/>
+  <line x1="0" y1="74" x2="1856" y2="74" stroke="#313a4a" stroke-width="1"/>
+
+  <g class="sf" opacity="0.86">
+    <text x="28" y="46" font-size="22" fill="#f3f6fb" font-weight="700">Finder</text>
+    <text x="108" y="46" font-size="20" fill="#ccd5e3">File</text>
+    <text x="164" y="46" font-size="20" fill="#ccd5e3">Edit</text>
+    <text x="220" y="46" font-size="20" fill="#ccd5e3">View</text>
+    <text x="286" y="46" font-size="20" fill="#ccd5e3">Window</text>
+  </g>
+
+  <!-- Camera housing / hardware cutout. No app content is placed here. -->
+  <path d="M812 0 H1044 V29 C1044 58 1021 82 992 82 H864 C835 82 812 58 812 29 Z" fill="#020204" filter="url(#softShadow)"/>
+  <rect x="842" y="12" width="172" height="42" rx="21" fill="#050507"/>
+  <circle cx="928" cy="33" r="8" fill="#0d1118"/>
+  <circle cx="928" cy="33" r="3.5" fill="#172433"/>
+
+  <!-- Safe-area guides around the notch. -->
+  <line x1="788" y1="0" x2="788" y2="290" class="line"/>
+  <line x1="1068" y1="0" x2="1068" y2="290" class="line"/>
+  <text x="632" y="112" class="sf caption">left auxiliary top area</text>
+  <text x="1090" y="112" class="sf caption">right auxiliary top area</text>
+  <text x="928" y="142" text-anchor="middle" class="sf caption" fill="#ffcf76">camera housing reserved</text>
+
+  <!-- Notch-safe current-space status item. -->
+  <g filter="url(#softShadow)">
+    <rect x="538" y="10" width="236" height="52" rx="18" fill="#06070a" opacity="0.96"/>
+    <rect x="538" y="10" width="236" height="52" rx="18" fill="#ffffff" opacity="0.04"/>
+    <rect x="538" y="10" width="236" height="2.5" rx="1.25" fill="url(#edgeLine)"/>
+    <rect x="552" y="18" width="36" height="36" rx="12" fill="url(#activeBadge)" filter="url(#subtleGlow)"/>
+    <text x="570" y="45" text-anchor="middle" class="sf" font-size="24" fill="#ffffff" font-weight="800">2</text>
+    <circle cx="607" cy="25" r="4" fill="#50f1a7"/>
+    <text x="622" y="29" class="sf mono" font-size="11" fill="#99a4b6" font-weight="800">LIVE</text>
+    <text x="606" y="48" class="sf" font-size="21" fill="#f3f6fc" font-weight="760">tools</text>
+    <text x="694" y="48" class="sf mono" font-size="16" fill="#aab4c6" font-weight="650">D1</text>
+  </g>
+
+  <!-- Notch-safe space switcher. -->
+  <g filter="url(#softShadow)">
+    <rect x="1082" y="12" width="346" height="48" rx="17" fill="#07080c" opacity="0.94"/>
+    <rect x="1082" y="12" width="346" height="48" rx="17" fill="#ffffff" opacity="0.045"/>
+    <text x="1102" y="42" class="sf mono" font-size="15" fill="#9ba7ba" font-weight="750">SPACES</text>
+    <g class="sf mono" font-size="17" font-weight="760">
+      <rect x="1180" y="20" width="30" height="30" rx="10" fill="#151b26" stroke="#394252"/>
+      <text x="1195" y="41" text-anchor="middle" fill="#bcc7d8">1</text>
+      <rect x="1218" y="18" width="34" height="34" rx="11" fill="#f3f6fc"/>
+      <text x="1235" y="41" text-anchor="middle" fill="#0b0d12">2</text>
+      <rect x="1260" y="20" width="30" height="30" rx="10" fill="#151b26" stroke="#394252"/>
+      <text x="1275" y="41" text-anchor="middle" fill="#bcc7d8">3</text>
+      <rect x="1298" y="20" width="30" height="30" rx="10" fill="#151b26" stroke="#394252"/>
+      <text x="1313" y="41" text-anchor="middle" fill="#bcc7d8">4</text>
+      <rect x="1336" y="20" width="30" height="30" rx="10" fill="#151b26" stroke="#394252"/>
+      <text x="1351" y="41" text-anchor="middle" fill="#bcc7d8">5</text>
+      <rect x="1374" y="20" width="30" height="30" rx="10" fill="#151b26" stroke="#394252"/>
+      <text x="1389" y="41" text-anchor="middle" fill="#bcc7d8">6</text>
+    </g>
+  </g>
+
+  <g class="sf" opacity="0.9">
+    <circle cx="1488" cy="35" r="13" fill="#e4eaf4"/>
+    <circle cx="1530" cy="35" r="13" fill="#e4eaf4"/>
+    <circle cx="1572" cy="35" r="13" fill="#e4eaf4"/>
+    <text x="1622" y="43" font-size="23" fill="#f4f7fb" font-weight="700">37%</text>
+    <text x="1700" y="43" font-size="22" fill="#f6d247" font-weight="760">70%</text>
+    <text x="1778" y="43" font-size="20" fill="#ccd5e3" font-weight="650">Sat 23</text>
+  </g>
+
+  <!-- Review board. -->
+  <g class="sf">
+    <text x="96" y="188" class="heading">yabai space notch-safe design</text>
+    <text x="96" y="226" class="caption">目标：展示当前 space，同时支持快速切换；交互只占用刘海左右可见菜单栏区域，不进入 camera housing。</text>
+
+    <g transform="translate(96 278)">
+      <rect width="520" height="308" rx="24" fill="#0b1019" opacity="0.90" stroke="#273247"/>
+      <text x="30" y="52" class="label">正常态</text>
+      <text x="30" y="87" class="caption">左侧状态项只显示当前 space。</text>
+      <rect x="30" y="128" width="296" height="70" rx="23" fill="#050609"/>
+      <rect x="48" y="143" width="45" height="45" rx="14" fill="url(#activeBadge)"/>
+      <text x="70.5" y="176" text-anchor="middle" font-size="30" fill="#fff" font-weight="850">2</text>
+      <circle cx="113" cy="153" r="4.5" fill="#50f1a7"/>
+      <text x="128" y="157" class="mono" font-size="12" fill="#9ba7ba" font-weight="800">LIVE</text>
+      <text x="112" y="183" font-size="23" fill="#f2f6ff" font-weight="760">tools</text>
+      <text x="208" y="183" class="mono" font-size="17" fill="#aab4c6" font-weight="700">D1</text>
+      <text x="30" y="246" class="callout">状态清楚、信息密度低、不会抢占系统菜单。</text>
+    </g>
+
+    <g transform="translate(668 278)">
+      <rect width="520" height="308" rx="24" fill="#0b1019" opacity="0.90" stroke="#273247"/>
+      <text x="30" y="52" class="label">Hover / 切换态</text>
+      <text x="30" y="87" class="caption">右侧展开可点击 space targets。</text>
+      <rect x="30" y="128" width="430" height="70" rx="23" fill="#050609"/>
+      <text x="56" y="170" class="mono" font-size="16" fill="#9ba7ba" font-weight="800">SPACES</text>
+      <g class="mono" font-size="20" font-weight="800">
+        <rect x="154" y="142" width="42" height="42" rx="14" fill="#151b26" stroke="#394252"/>
+        <text x="175" y="170" text-anchor="middle" fill="#c4cede">1</text>
+        <rect x="206" y="139" width="48" height="48" rx="16" fill="#f3f6fc"/>
+        <text x="230" y="171" text-anchor="middle" fill="#080a0f">2</text>
+        <rect x="264" y="142" width="42" height="42" rx="14" fill="#151b26" stroke="#394252"/>
+        <text x="285" y="170" text-anchor="middle" fill="#c4cede">3</text>
+        <rect x="316" y="142" width="42" height="42" rx="14" fill="#151b26" stroke="#394252"/>
+        <text x="337" y="170" text-anchor="middle" fill="#c4cede">4</text>
+        <rect x="368" y="142" width="42" height="42" rx="14" fill="#151b26" stroke="#394252"/>
+        <text x="389" y="170" text-anchor="middle" fill="#c4cede">5</text>
+      </g>
+      <text x="30" y="246" class="callout">当前项反白；其他项保持系统菜单栏低对比风格。</text>
+    </g>
+
+    <g transform="translate(1240 278)">
+      <rect width="520" height="308" rx="24" fill="#0b1019" opacity="0.90" stroke="#273247"/>
+      <text x="30" y="52" class="label">规范落点</text>
+      <text x="30" y="94" class="caption">1. camera housing 保留为空。</text>
+      <text x="30" y="133" class="caption">2. 左右组件分别约束在辅助顶部区域。</text>
+      <text x="30" y="172" class="caption">3. 组件按 menu bar extra 处理：单行、紧凑、低干扰。</text>
+      <text x="30" y="211" class="caption">4. 数字目标维持稳定尺寸，避免切换时布局跳动。</text>
+      <text x="30" y="250" class="caption">5. 状态文字只用于同步/错误/当前 space，不做装饰。</text>
+    </g>
+  </g>
+</svg>
