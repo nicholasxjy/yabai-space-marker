@@ -4,7 +4,9 @@
 
 The UI uses a fixed native notch-style black shell with focused-space emphasis, numeric text transitions, a brief sticky liquid response, and a top-edge cyberpunk gradient line whenever the active space changes.
 
-<video src="https://private-user-images.githubusercontent.com/3580943/593658768-f90eadd8-57f3-4f1e-b409-4a3865676e63.mp4?jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3Nzg5OTcxOTYsIm5iZiI6MTc3ODk5Njg5NiwicGF0aCI6Ii8zNTgwOTQzLzU5MzY1ODc2OC1mOTBlYWRkOC01N2YzLTRmMWUtYjQwOS00YTM4NjU2NzZlNjMubXA0P1gtQW16LUFsZ29yaXRobT1BV1M0LUhNQUMtU0hBMjU2JlgtQW16LUNyZWRlbnRpYWw9QUtJQVZDT0RZTFNBNTNQUUs0WkElMkYyMDI2MDUxNyUyRnVzLWVhc3QtMSUyRnMzJTJGYXdzNF9yZXF1ZXN0JlgtQW16LURhdGU9MjAyNjA1MTdUMDU0ODE2WiZYLUFtei1FeHBpcmVzPTMwMCZYLUFtei1TaWduYXR1cmU9NWEyNTY1YTc3OGEwYmJiNWQ3ZDFhODk4MjlhNmVmNTBlMDAyZmVjOTM5MTBhZDYxODZhMzZmZjEyMTE0ZDk2NSZYLUFtei1TaWduZWRIZWFkZXJzPWhvc3QmcmVzcG9uc2UtY29udGVudC10eXBlPXZpZGVvJTJGbXA0In0.iSAvSeK27oNOmLHjutfsiWrNccVQDHeO518OKs2sBxg" controls width="800"></video>
+## Demo
+
+![yabai-space-marker demo](assets/demo.png)
 
 ## Features
 
