@@ -5,7 +5,7 @@ A compact macOS companion for `yabai` that keeps the current space visible in a 
 It can sit in the top notch area or at the bottom center of the current screen, follows the active display, and shows the focused space, display index, total space count, and sync/error state at a glance.
 
 <p align="center">
-  <img src="assets/demo.png" alt="yabai-space-marker demo" width="1200" />
+  <img src="assets/demo1.png" alt="yabai-space-marker demo" width="1200" />
 </p>
 
 ## Highlights
@@ -108,7 +108,7 @@ build-signed/Build/Products/Debug/yabai-space-marker.app
 ```text
 .
 ├── assets/
-│   └── demo.png
+│   └── demo1.png
 ├── yabai-space-marker/
 │   ├── ContentView.swift
 │   ├── yabai_space_markerApp.swift
