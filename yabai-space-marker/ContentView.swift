@@ -40,7 +40,6 @@ enum FloatingPanelMetrics {
 struct ContentView: View {
     @Environment(\.colorScheme) private var colorScheme
     @ObservedObject var monitor: YabaiSpacesMonitor
-    @ObservedObject var settings: AppSettings
 
     @State private var isPointerHovering = false
     @State private var isSwitchPulsing = false
@@ -106,7 +105,6 @@ struct ContentView: View {
                 NSApplication.shared.terminate(nil)
             }
         }
-        .preferredColorScheme(settings.preferredColorScheme)
     }
 
     private func playSpaceSwitchAnimation() {
@@ -917,12 +915,12 @@ struct ContentView_Previews: PreviewProvider {
 
     static var previews: some View {
         Group {
-            ContentView(monitor: YabaiSpacesMonitor(settings: previewSettings), settings: previewSettings)
+            ContentView(monitor: YabaiSpacesMonitor(settings: previewSettings))
                 .padding(24)
                 .background(FloatingTheme.light.previewBackground)
                 .preferredColorScheme(.light)
 
-            ContentView(monitor: YabaiSpacesMonitor(settings: previewSettings), settings: previewSettings)
+            ContentView(monitor: YabaiSpacesMonitor(settings: previewSettings))
                 .padding(24)
                 .background(FloatingTheme.dark.previewBackground)
                 .preferredColorScheme(.dark)

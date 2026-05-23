@@ -11,55 +11,6 @@ import Combine
 import QuartzCore
 import ServiceManagement
 
-enum AppAppearance: String, CaseIterable, Identifiable {
-    case system
-    case light
-    case dark
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .system:
-            return "System"
-        case .light:
-            return "Light"
-        case .dark:
-            return "Dark"
-        }
-    }
-
-    var colorScheme: ColorScheme? {
-        switch self {
-        case .system:
-            return nil
-        case .light:
-            return .light
-        case .dark:
-            return .dark
-        }
-    }
-
-    var nsAppearance: NSAppearance? {
-        switch self {
-        case .system:
-            return nil
-        case .light:
-            return NSAppearance(named: .aqua)
-        case .dark:
-            return NSAppearance(named: .darkAqua)
-        }
-    }
-
-    nonisolated static func resolve() -> AppAppearance {
-        if let stored = UserDefaults.standard.string(forKey: "appearance")?.lowercased(),
-           let appearance = AppAppearance(rawValue: stored) {
-            return appearance
-        }
-        return .system
-    }
-}
-
 @main
 struct yabai_space_markerApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
@@ -73,35 +24,13 @@ struct yabai_space_markerApp: App {
 
 @MainActor
 final class AppSettings: ObservableObject {
-    enum Keys {
-        static let appearance = "appearance"
-    }
-
-    @Published var appearance: AppAppearance {
-        didSet {
-            guard oldValue != appearance else { return }
-            UserDefaults.standard.set(appearance.rawValue, forKey: Keys.appearance)
-        }
-    }
-
     @Published private(set) var launchAtLoginEnabled = false
     @Published private(set) var launchAtLoginDescription = ""
     @Published private(set) var launchAtLoginError: String?
 
-    var preferredColorScheme: ColorScheme? {
-        appearance.colorScheme
-    }
-
-    var windowAppearance: NSAppearance? {
-        appearance.nsAppearance
-    }
-
     init(
-        appearance: AppAppearance = AppAppearance.resolve(),
         refreshLaunchAtLoginStatus: Bool = true
     ) {
-        self.appearance = appearance
-
         if refreshLaunchAtLoginStatus {
             refreshLaunchAtLoginStatusState()
         } else {
@@ -165,30 +94,6 @@ struct SettingsView: View {
                 SettingsHeroHeader()
 
                 SettingsCard(
-                    icon: "slider.horizontal.3",
-                    title: "Panel",
-                    description: "Appearance for the top notch panel."
-                ) {
-                    VStack(spacing: 0) {
-                        SettingsRow {
-                            VStack(alignment: .leading, spacing: 12) {
-                                SettingsRowHeader(
-                                    title: "Appearance",
-                                    description: "Choose whether the panel follows macOS or stays in a fixed light or dark style."
-                                )
-
-                                Picker("Appearance", selection: $settings.appearance) {
-                                    ForEach(AppAppearance.allCases) { appearance in
-                                        Text(appearance.title).tag(appearance)
-                                    }
-                                }
-                                .pickerStyle(.segmented)
-                            }
-                        }
-                    }
-                }
-
-                SettingsCard(
                     icon: "desktopcomputer",
                     title: "System",
                     description: "Control how Space Marker integrates with macOS."
@@ -247,7 +152,6 @@ struct SettingsView: View {
         }
         .frame(width: 560, height: 360)
         .background(Color(nsColor: .windowBackgroundColor))
-        .preferredColorScheme(settings.preferredColorScheme)
         .onAppear {
             settings.refreshLaunchAtLoginStatusState()
         }
@@ -400,7 +304,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             settingsWindowController = SettingsWindowController(settings: settings)
         }
 
-        settingsWindowController?.applyAppearance(settings.windowAppearance)
         NSApp.activate(ignoringOtherApps: true)
         settingsWindowController?.showWindow(nil)
         settingsWindowController?.window?.makeKeyAndOrderFront(nil)
@@ -429,10 +332,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.titlebarAppearsTransparent = true
         panel.isReleasedWhenClosed = false
 
-        let rootView = ContentView(monitor: monitor, settings: settings)
+        let rootView = ContentView(monitor: monitor)
             .background(Color.clear)
-
-        panel.appearance = settings.windowAppearance
 
         let hostingView = NSHostingView(rootView: rootView)
         hostingView.wantsLayer = true
@@ -460,13 +361,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             .store(in: &cancellables)
 
-        settings.$appearance
-            .removeDuplicates()
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in
-                self?.applyAppearance()
-            }
-            .store(in: &cancellables)
     }
 
     private func observeSystemChanges() {
@@ -524,11 +418,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }))
         }
-    }
-
-    private func applyAppearance() {
-        window?.appearance = settings.windowAppearance
-        settingsWindowController?.applyAppearance(settings.windowAppearance)
     }
 
     private func updateWindowFrame(animated: Bool) {
@@ -617,10 +506,6 @@ final class SettingsWindowController: NSWindowController {
         window.center()
         super.init(window: window)
         shouldCascadeWindows = false
-    }
-
-    func applyAppearance(_ appearance: NSAppearance?) {
-        window?.appearance = appearance
     }
 
     @available(*, unavailable)

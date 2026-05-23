@@ -13,7 +13,7 @@ The UI uses a fixed native notch-style black shell with focused-space emphasis, 
 - Numeric transition for space number changes
 - Sticky liquid stretch and top-edge cyan / magenta gradient line on space changes
 - Compact native notch-style UI
-- Supports system / light / dark appearance modes
+- Fixed native notch-style appearance with a dedicated settings window for app controls
 - Adaptive refresh scheduling to reduce idle CPU usage while keeping hover/manual updates responsive
 - Command timeout protection for `yabai` queries/focus calls to avoid stuck subprocesses consuming resources
 - Silent background refreshes to avoid unnecessary loading-state redraws during steady-state polling
@@ -22,7 +22,7 @@ The UI uses a fixed native notch-style black shell with focused-space emphasis, 
 - Coalesced window/layout updates for smoother animations and less redundant work
 - Inline total-space count, Settings, and Quit controls on the notch
 - Right-click menu with Settings, Refresh, and Quit actions
-- Built-in settings page for appearance mode, launch at login, and quit
+- Built-in settings page for launch at login and quit
 
 ## How it works
 
@@ -39,7 +39,6 @@ When macOS reports an active-space change, or when a focus request completes, th
 
 Open the app settings to configure:
 
-- appearance mode (`system` / `light` / `dark`)
 - launch at login
 - quit the app
 
@@ -124,13 +123,9 @@ build-signed/Build/Products/Debug/yabai-space-marker.app
 
 ## Appearance
 
-The panel supports three appearance modes:
+The panel now uses a fixed native notch-style black shell so it stays visually consistent with the hardware cutout. The floating panel remains transparent around the shell and sits above the menu bar at the physical top center of the current display.
 
-- **System**: follows the current macOS appearance automatically
-- **Light mode**: keeps the native black notch surface while adapting the settings window
-- **Dark mode**: keeps the native black notch surface with elevated settings-window contrast
-
-You can switch appearance directly from the settings page.
+The separate settings window uses standard macOS materials for launch-at-login and app controls.
 
 ## UI model
 
