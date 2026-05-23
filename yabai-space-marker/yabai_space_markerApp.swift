@@ -11,6 +11,22 @@ import Combine
 import QuartzCore
 import ServiceManagement
 
+enum PanelPlacement: String, CaseIterable, Identifiable {
+    case top
+    case bottom
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .top:
+            return "Top"
+        case .bottom:
+            return "Bottom"
+        }
+    }
+}
+
 @main
 struct yabai_space_markerApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
@@ -24,13 +40,21 @@ struct yabai_space_markerApp: App {
 
 @MainActor
 final class AppSettings: ObservableObject {
+    private enum DefaultsKey {
+        static let panelPlacement = "panelPlacement"
+    }
+
     @Published private(set) var launchAtLoginEnabled = false
     @Published private(set) var launchAtLoginDescription = ""
     @Published private(set) var launchAtLoginError: String?
+    @Published private(set) var panelPlacement: PanelPlacement
 
     init(
         refreshLaunchAtLoginStatus: Bool = true
     ) {
+        let storedPlacement = UserDefaults.standard.string(forKey: DefaultsKey.panelPlacement)
+        panelPlacement = storedPlacement.flatMap(PanelPlacement.init(rawValue:)) ?? .top
+
         if refreshLaunchAtLoginStatus {
             refreshLaunchAtLoginStatusState()
         } else {
@@ -76,6 +100,12 @@ final class AppSettings: ObservableObject {
         }
     }
 
+    func setPanelPlacement(_ placement: PanelPlacement) {
+        guard panelPlacement != placement else { return }
+        panelPlacement = placement
+        UserDefaults.standard.set(placement.rawValue, forKey: DefaultsKey.panelPlacement)
+    }
+
 }
 
 struct SettingsView: View {
@@ -85,6 +115,13 @@ struct SettingsView: View {
         Binding(
             get: { settings.launchAtLoginEnabled },
             set: { settings.setLaunchAtLogin($0) }
+        )
+    }
+
+    private var panelPlacementBinding: Binding<PanelPlacement> {
+        Binding(
+            get: { settings.panelPlacement },
+            set: { settings.setPanelPlacement($0) }
         )
     }
 
@@ -124,6 +161,29 @@ struct SettingsView: View {
                             }
                         }
                     }
+
+                    SettingsRowDivider()
+
+                    SettingsRow {
+                        HStack(alignment: .center, spacing: 16) {
+                            SettingsRowHeader(
+                                title: "Panel position",
+                                description: "Place the panel at the top notch area or the bottom center of the current screen."
+                            )
+
+                            Spacer(minLength: 12)
+
+                            Picker("", selection: panelPlacementBinding) {
+                                ForEach(PanelPlacement.allCases) { placement in
+                                    Text(placement.title)
+                                        .tag(placement)
+                                }
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.segmented)
+                            .frame(width: 180)
+                        }
+                    }
                 }
 
                 SettingsCard(
@@ -150,7 +210,7 @@ struct SettingsView: View {
             }
             .padding(24)
         }
-        .frame(width: 560, height: 360)
+        .frame(width: 560, height: 430)
         .background(Color(nsColor: .windowBackgroundColor))
         .onAppear {
             settings.refreshLaunchAtLoginStatusState()
@@ -276,13 +336,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     static weak var shared: AppDelegate?
 
     let settings = AppSettings()
+    private let notchLayout = NotchLayoutState()
 
     private lazy var monitor = YabaiSpacesMonitor(settings: settings)
     private var window: FloatingPanel?
+    private weak var hostingView: NotchPassthroughHostingView<ContentView>?
     private var settingsWindowController: SettingsWindowController?
     private var cancellables = Set<AnyCancellable>()
     private var observers: [(center: NotificationCenter, token: NSObjectProtocol)] = []
     private var isApplyingManagedWindowFrame = false
+
+    private struct CameraHousingGeometry {
+        let width: CGFloat
+        let leftEdgeX: CGFloat
+        let rightEdgeX: CGFloat
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Self.shared = self
@@ -332,16 +400,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.titlebarAppearsTransparent = true
         panel.isReleasedWhenClosed = false
 
-        let rootView = ContentView(monitor: monitor)
-            .background(Color.clear)
+        let rootView = ContentView(monitor: monitor, notchLayout: notchLayout)
 
-        let hostingView = NSHostingView(rootView: rootView)
+        let hostingView = NotchPassthroughHostingView(rootView: rootView)
         hostingView.wantsLayer = true
         hostingView.layer?.backgroundColor = NSColor.clear.cgColor
         hostingView.layer?.isOpaque = false
         hostingView.layer?.masksToBounds = false
 
         panel.contentView = hostingView
+        self.hostingView = hostingView
         panel.orderFrontRegardless()
 
         window = panel
@@ -356,6 +424,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
                 DispatchQueue.main.async {
+                    self?.updateWindowFrame(animated: true)
+                }
+            }
+            .store(in: &cancellables)
+
+        settings.$panelPlacement
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] placement in
+                DispatchQueue.main.async {
+                    self?.notchLayout.placement = placement
+                    self?.hostingView?.placement = placement
                     self?.updateWindowFrame(animated: true)
                 }
             }
@@ -423,8 +503,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func updateWindowFrame(animated: Bool) {
         guard let window else { return }
 
+        let screen = anchorScreen() ?? window.screen ?? NSScreen.main ?? NSScreen.screens.first
+        let cameraHousingGeometry = Self.cameraHousingGeometry(for: screen)
+        let avoidsCameraHousing = settings.panelPlacement == .top && cameraHousingGeometry != nil
+        let cameraHousingReservedWidth = cameraHousingGeometry?.width ?? FloatingPanelMetrics.defaultCameraHousingReservedWidth
+        if notchLayout.avoidsCameraHousing != avoidsCameraHousing {
+            notchLayout.avoidsCameraHousing = avoidsCameraHousing
+        }
+        if notchLayout.placement != settings.panelPlacement {
+            notchLayout.placement = settings.panelPlacement
+        }
+        if notchLayout.cameraHousingReservedWidth != cameraHousingReservedWidth {
+            notchLayout.cameraHousingReservedWidth = cameraHousingReservedWidth
+        }
+        hostingView?.avoidsCameraHousing = avoidsCameraHousing
+        hostingView?.placement = settings.panelPlacement
+        hostingView?.cameraHousingReservedWidth = cameraHousingReservedWidth
+
         let requestedSize = panelSize()
-        let frame = resolvedWindowFrame(for: requestedSize, fallbackScreen: window.screen)
+        let frame = resolvedWindowFrame(
+            for: requestedSize,
+            screen: screen,
+            cameraHousingGeometry: avoidsCameraHousing ? cameraHousingGeometry : nil
+        )
 
         if window.frame.integral == frame.integral {
             return
@@ -435,19 +536,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func panelSize() -> NSSize {
         NSSize(
-            width: FloatingPanelMetrics.notchWidth + (FloatingPanelMetrics.notchAnimationInset * 2),
+            width: FloatingPanelMetrics.panelWidth(
+                avoidsCameraHousing: notchLayout.avoidsCameraHousing,
+                cameraHousingReservedWidth: notchLayout.cameraHousingReservedWidth
+            ),
             height: FloatingPanelMetrics.notchHeight
         )
     }
 
-    private func resolvedWindowFrame(for requestedSize: NSSize, fallbackScreen: NSScreen?) -> CGRect {
-        let screen = anchorScreen() ?? fallbackScreen ?? NSScreen.main ?? NSScreen.screens.first
+    private func resolvedWindowFrame(
+        for requestedSize: NSSize,
+        screen: NSScreen?,
+        cameraHousingGeometry: CameraHousingGeometry?
+    ) -> CGRect {
         let screenFrame = screen?.frame ?? CGRect(x: 0, y: 0, width: requestedSize.width, height: requestedSize.height)
+        let visibleFrame = screen?.visibleFrame ?? screenFrame
 
         let width = min(requestedSize.width, max(220, screenFrame.width - (FloatingPanelMetrics.horizontalInset * 2)))
         let height = min(requestedSize.height, max(FloatingPanelMetrics.notchHeight, screenFrame.height - (FloatingPanelMetrics.topInset * 2)))
-        let x = screenFrame.midX - (width / 2)
-        let y = screenFrame.maxY - FloatingPanelMetrics.topInset - height
+        let x: CGFloat
+        if settings.panelPlacement == .top, let cameraHousingGeometry {
+            x = cameraHousingGeometry.leftEdgeX
+                - FloatingPanelMetrics.notchAnimationInset
+                - FloatingPanelMetrics.statusWidth
+                - FloatingPanelMetrics.animationSafeInset
+        } else if settings.panelPlacement == .top {
+            let centerOffset = min(
+                FloatingPanelMetrics.cameraHousingCenterX(avoidsCameraHousing: false),
+                width / 2
+            )
+            x = screenFrame.midX - centerOffset
+        } else {
+            x = screenFrame.midX - (width / 2)
+        }
+
+        let y: CGFloat
+        if settings.panelPlacement == .top {
+            y = screenFrame.maxY - FloatingPanelMetrics.topInset - height
+        } else {
+            y = visibleFrame.minY + FloatingPanelMetrics.topInset
+        }
         return CGRect(x: x, y: y, width: width, height: height)
     }
 
@@ -473,7 +601,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func handleWindowDidMove() {
         guard let window, !isApplyingManagedWindowFrame else { return }
 
-        let resolvedFrame = resolvedWindowFrame(for: panelSize(), fallbackScreen: window.screen)
+        let screen = anchorScreen() ?? window.screen ?? NSScreen.main ?? NSScreen.screens.first
+        let cameraHousingGeometry = settings.panelPlacement == .top
+            ? Self.cameraHousingGeometry(for: screen)
+            : nil
+        let resolvedFrame = resolvedWindowFrame(
+            for: panelSize(),
+            screen: screen,
+            cameraHousingGeometry: cameraHousingGeometry
+        )
 
         if resolvedFrame.integral != window.frame.integral {
             applyWindowFrame(resolvedFrame)
@@ -485,11 +621,94 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return NSScreen.screens.first { NSMouseInRect(mouseLocation, $0.frame, false) }
     }
 
+    private static func cameraHousingGeometry(for screen: NSScreen?) -> CameraHousingGeometry? {
+        guard let screen else { return nil }
+
+        guard let leftArea = screen.auxiliaryTopLeftArea,
+              let rightArea = screen.auxiliaryTopRightArea else {
+            return nil
+        }
+
+        guard !leftArea.isEmpty, !rightArea.isEmpty else {
+            return nil
+        }
+
+        let cameraHousingGap = rightArea.minX - leftArea.maxX
+        guard cameraHousingGap >= 64 else {
+            return nil
+        }
+
+        let leftEdgeX = Self.screenCoordinateX(leftArea.maxX, for: screen)
+        let rightEdgeX = Self.screenCoordinateX(rightArea.minX, for: screen)
+        let width = rightEdgeX - leftEdgeX
+
+        guard width >= 64 else {
+            return nil
+        }
+
+        return CameraHousingGeometry(width: width, leftEdgeX: leftEdgeX, rightEdgeX: rightEdgeX)
+    }
+
+    private static func screenCoordinateX(_ x: CGFloat, for screen: NSScreen) -> CGFloat {
+        (screen.frame.minX...screen.frame.maxX).contains(x) ? x : screen.frame.minX + x
+    }
+
 }
 
 final class FloatingPanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
+}
+
+final class NotchPassthroughHostingView<Content: View>: NSHostingView<Content> {
+    var avoidsCameraHousing = true
+    var placement: PanelPlacement = .top
+    var cameraHousingReservedWidth = FloatingPanelMetrics.defaultCameraHousingReservedWidth
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        guard isPointInsideInteractiveRegion(point) else {
+            return nil
+        }
+        return super.hitTest(point)
+    }
+
+    private func isPointInsideInteractiveRegion(_ point: NSPoint) -> Bool {
+        let componentMinY = placement == .top
+            ? bounds.maxY - FloatingPanelMetrics.componentHeight
+            : bounds.minY
+        let componentYRange = componentMinY...(componentMinY + FloatingPanelMetrics.componentHeight)
+        guard componentYRange.contains(point.y) else {
+            return false
+        }
+
+        if !avoidsCameraHousing {
+            return CGRect(
+                x: FloatingPanelMetrics.animationSafeInset,
+                y: componentMinY,
+                width: FloatingPanelMetrics.unifiedContentWidth,
+                height: FloatingPanelMetrics.componentHeight
+            ).insetBy(dx: -8, dy: -4).contains(point)
+        }
+
+        let leftRegion = CGRect(
+            x: FloatingPanelMetrics.animationSafeInset,
+            y: componentMinY,
+            width: FloatingPanelMetrics.statusWidth,
+            height: FloatingPanelMetrics.componentHeight
+        ).insetBy(dx: -8, dy: -4)
+
+        let rightRegion = CGRect(
+            x: FloatingPanelMetrics.switcherOriginX(
+                avoidsCameraHousing: true,
+                cameraHousingReservedWidth: cameraHousingReservedWidth
+            ),
+            y: componentMinY,
+            width: FloatingPanelMetrics.switcherWidth,
+            height: FloatingPanelMetrics.componentHeight
+        ).insetBy(dx: -8, dy: -4)
+
+        return leftRegion.contains(point) || rightRegion.contains(point)
+    }
 }
 
 @MainActor

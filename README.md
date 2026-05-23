@@ -1,73 +1,77 @@
 # yabai-space-marker
 
-`yabai-space-marker` is a small macOS notch panel built with SwiftUI and AppKit. It stays attached to the physical top-center notch area of the current screen, floating above the menu bar, and shows the currently focused `yabai` space.
+A compact macOS companion for `yabai` that keeps the current space visible in a native floating panel.
 
-The UI uses a fixed native notch-style black shell with focused-space emphasis, numeric text transitions, a brief sticky liquid response, and a top-edge cyberpunk gradient line whenever the active space changes.
+It can sit in the top notch area or at the bottom center of the current screen, follows the active display, and shows the focused space, display index, total space count, and sync/error state at a glance.
 
-## Demo
+<p align="center">
+  <img src="assets/demo1.png" alt="yabai-space-marker demo" width="1200" />
+</p>
 
-![yabai-space-marker demo](assets/demo.png)
+## Highlights
 
-## Features
-
-- Fixed physical top-center notch panel on the current screen
-- Shows only the active space number, label or `Space N`, display, and sync/error state
-- Numeric transition for space number changes
-- Sticky liquid stretch and top-edge cyan / magenta gradient line on space changes
-- Compact native notch-style UI
-- Fixed native notch-style appearance with a dedicated settings window for app controls
-- Adaptive refresh scheduling to reduce idle CPU usage while keeping hover/manual updates responsive
-- Command timeout protection for `yabai` queries/focus calls to avoid stuck subprocesses consuming resources
-- Silent background refreshes to avoid unnecessary loading-state redraws during steady-state polling
-- Refresh loop pauses automatically while displays are asleep and resumes on wake
-- `yabai` subprocess timeout waiting uses event-driven completion instead of a spin/sleep polling loop
-- Coalesced window/layout updates for smoother animations and less redundant work
-- Inline total-space count, Settings, and Quit controls on the notch
-- Right-click menu with Settings, Refresh, and Quit actions
-- Built-in settings page for launch at login and quit
-
-## How it works
-
-The app does not manage spaces directly. It shells out to the `yabai` CLI:
-
-- Query spaces: `yabai -m query --spaces`
-- Focus a space: `yabai -m space --focus <index>`
-
-The app refreshes space state with adaptive scheduling instead of a constant high-frequency polling loop. It uses a faster refresh cadence while the pointer is over the panel and adds timeout protection around `yabai` subprocesses so hung commands do not keep consuming resources.
-
-When macOS reports an active-space change, or when a focus request completes, the app refreshes `yabai` state and updates the notch content to the actual focused space.
-
-### Settings page
-
-Open the app settings to configure:
-
-- launch at login
-- quit the app
+- Native SwiftUI + AppKit macOS app
+- Floating panel that follows the current screen
+- Adjustable panel position: **Top** or **Bottom**
+- Compact notch-style UI with animated space updates
+- Shows the focused space title, display number, and total space count
+- Built-in settings window for **Launch at login**, panel position, and quit
+- Right-click menu with **Settings**, **Refresh**, and **Quit**
+- Adaptive refresh scheduling to reduce idle CPU usage
+- Command timeout protection for `yabai` queries
+- Refresh automatically pauses while displays sleep and resumes on wake
+- Error state stays compact instead of resizing the panel
 
 ## Requirements
 
 You need a working `yabai` setup before running this app.
 
-### Required
-
 - macOS
 - `yabai` installed
-- `yabai` can run successfully from Terminal
-- Your `yabai` configuration and permissions already allow querying spaces and focusing spaces
+- `yabai -m query --spaces` works in Terminal
+- Your `yabai` permissions and configuration already allow normal space queries
 
-### `yabai` executable lookup order
+## How it works
+
+The app reads live space data from the `yabai` CLI:
+
+```bash
+yabai -m query --spaces
+```
+
+It does **not** manage its own virtual-space state or rely on mock data. Instead, it continuously reflects the focused `yabai` space and refreshes more aggressively only when interaction or system events make it necessary.
+
+Runtime behavior:
+
+- adaptive refresh cadence for interactive vs idle states
+- follow-up refresh after relevant events
+- timeout protection around `yabai` subprocesses
+- silent background refreshes during steady-state polling
+- automatic pause/resume when displays sleep or wake
+
+## Settings
+
+The built-in settings window currently supports:
+
+- **Launch at login**
+- **Panel position**: Top / Bottom
+- **Quit Space Marker**
+
+The floating panel also includes inline controls for total space count, settings, and quit, plus a right-click context menu for quick actions.
+
+## `yabai` executable lookup order
 
 The app resolves `yabai` in this order:
 
 1. `YABAI_BIN`
 2. `yabai` found in the current `PATH`
-3. Fixed fallback paths:
+3. fixed fallback paths:
    - `/opt/homebrew/bin/yabai`
    - `/opt/homebrew/sbin/yabai`
    - `/usr/local/bin/yabai`
    - `/usr/local/sbin/yabai`
 
-If you installed `yabai` somewhere else, set the path explicitly:
+If your install lives somewhere else, set it explicitly:
 
 ```bash
 export YABAI_BIN="/your/path/to/yabai"
@@ -93,7 +97,7 @@ xcodebuild \
   build
 ```
 
-The default app bundle path is:
+Default app bundle path:
 
 ```text
 build-signed/Build/Products/Debug/yabai-space-marker.app
@@ -103,6 +107,8 @@ build-signed/Build/Products/Debug/yabai-space-marker.app
 
 ```text
 .
+├── assets/
+│   └── demo1.png
 ├── yabai-space-marker/
 │   ├── ContentView.swift
 │   ├── yabai_space_markerApp.swift
@@ -113,27 +119,13 @@ build-signed/Build/Products/Debug/yabai-space-marker.app
 ### Key files
 
 - `yabai-space-marker/ContentView.swift`
-  - Notch panel UI
-  - Native notch-style surface components
-  - Space-change sticky liquid stretch and top-edge cyberpunk line animation
-  - `YabaiSpacesMonitor` data and interaction logic
-
+  - floating panel UI
+  - notch-style surface and animation behavior
+  - `YabaiSpacesMonitor` refresh logic
 - `yabai-space-marker/yabai_space_markerApp.swift`
-  - App entry point
-  - `NSPanel` creation and layout
-  - Fixed physical top-center panel placement when the screen or active space changes
-
-## Appearance
-
-The panel now uses a fixed native notch-style black shell so it stays visually consistent with the hardware cutout. The floating panel remains transparent around the shell and sits above the menu bar at the physical top center of the current display.
-
-The separate settings window uses standard macOS materials for launch-at-login and app controls.
-
-## UI model
-
-The app uses one fixed notch panel. It does not show a space list or offer panel placement controls. The right side of the notch shows the total space count, Settings, and Quit controls; the right-click menu also provides Settings, Refresh, and Quit.
-
-If `yabai` is unavailable or returns an error, the same compact notch shows an error state without resizing.
+  - app entry point
+  - `NSPanel` creation and placement
+  - settings window and system integration
 
 ## Troubleshooting
 
@@ -143,21 +135,22 @@ Check the following:
 
 - `yabai -m query --spaces` works in Terminal
 - `yabai` is in `PATH`, or `YABAI_BIN` is set
-- Your install path is one of the supported lookup locations
+- your install path matches one of the supported lookup locations
 
-### Spaces are visible, but switching fails
+### The panel appears, but space data does not update
 
-This is usually a `yabai` permissions or configuration issue, not a UI issue. Confirm that:
+This is usually a `yabai` configuration or permission issue. Confirm that:
 
-- `yabai -m space --focus <index>` works in Terminal
-- Your `yabai` permissions, configuration, and scripting addition setup are correct for your environment
+- `yabai -m query --spaces` returns valid data
+- your `yabai` setup is running normally
+- your environment allows the app to execute the `yabai` binary
 
 ### Code signing fails during build
 
-The project uses Xcode automatic signing by default. On your machine, select your own team in Xcode or adjust signing settings to match your local setup.
+The project uses Xcode automatic signing by default. Select your own team in Xcode or adjust signing settings to match your local environment.
 
 ## Implementation notes
 
-- Uses real `yabai` data only; there is no runtime mock path
+- Uses live `yabai` data only
 - App Sandbox is disabled so the app can execute the external `yabai` binary
 - Runs as an accessory app instead of a normal Dock app
