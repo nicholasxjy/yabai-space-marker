@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.0.0 - 2026-05-23
+
+### Features
+- Center the active-space context inside a compact native notch panel
+- Refresh the panel shell with a hardware-matching notch silhouette, sticky liquid stretch animation, and animated top-edge flow line
+- Refresh the app icon set for the 1.0 release
+
+### Fixes
+- Anchor the panel to the physical top-center notch area using full-screen coordinates above the menu bar
+- Simplify the settings window to focus on launch-at-login and app controls for a more consistent native experience
+
 ## 0.0.6 - 2026-05-18
 
 ### Features

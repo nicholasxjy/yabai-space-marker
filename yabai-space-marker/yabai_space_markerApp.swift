@@ -11,55 +11,6 @@ import Combine
 import QuartzCore
 import ServiceManagement
 
-enum AppAppearance: String, CaseIterable, Identifiable {
-    case system
-    case light
-    case dark
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .system:
-            return "System"
-        case .light:
-            return "Light"
-        case .dark:
-            return "Dark"
-        }
-    }
-
-    var colorScheme: ColorScheme? {
-        switch self {
-        case .system:
-            return nil
-        case .light:
-            return .light
-        case .dark:
-            return .dark
-        }
-    }
-
-    var nsAppearance: NSAppearance? {
-        switch self {
-        case .system:
-            return nil
-        case .light:
-            return NSAppearance(named: .aqua)
-        case .dark:
-            return NSAppearance(named: .darkAqua)
-        }
-    }
-
-    nonisolated static func resolve() -> AppAppearance {
-        if let stored = UserDefaults.standard.string(forKey: "appearance")?.lowercased(),
-           let appearance = AppAppearance(rawValue: stored) {
-            return appearance
-        }
-        return .system
-    }
-}
-
 @main
 struct yabai_space_markerApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
@@ -73,64 +24,13 @@ struct yabai_space_markerApp: App {
 
 @MainActor
 final class AppSettings: ObservableObject {
-    enum Keys {
-        static let position = "position"
-        static let autoCollapseDelay = "autoCollapseDelay"
-        static let appearance = "appearance"
-    }
-
-    static let minimumAutoCollapseDelay = 0.5
-    static let maximumAutoCollapseDelay = 10.0
-
-    @Published var position: FloatingPanelPosition {
-        didSet {
-            guard oldValue != position else { return }
-            UserDefaults.standard.set(position.rawValue, forKey: Keys.position)
-        }
-    }
-
-    @Published var appearance: AppAppearance {
-        didSet {
-            guard oldValue != appearance else { return }
-            UserDefaults.standard.set(appearance.rawValue, forKey: Keys.appearance)
-        }
-    }
-
-    @Published var autoCollapseDelay: Double {
-        didSet {
-            let clamped = Self.clampAutoCollapseDelay(autoCollapseDelay)
-            if abs(autoCollapseDelay - clamped) > 0.001 {
-                autoCollapseDelay = clamped
-                return
-            }
-
-            UserDefaults.standard.set(clamped, forKey: Keys.autoCollapseDelay)
-        }
-    }
-
     @Published private(set) var launchAtLoginEnabled = false
     @Published private(set) var launchAtLoginDescription = ""
     @Published private(set) var launchAtLoginError: String?
 
-    var preferredColorScheme: ColorScheme? {
-        appearance.colorScheme
-    }
-
-    var windowAppearance: NSAppearance? {
-        appearance.nsAppearance
-    }
-
     init(
-        position: FloatingPanelPosition = FloatingPanelPosition.resolve(),
-        appearance: AppAppearance = AppAppearance.resolve(),
-        autoCollapseDelay: Double? = nil,
         refreshLaunchAtLoginStatus: Bool = true
     ) {
-        let storedDelay = UserDefaults.standard.object(forKey: Keys.autoCollapseDelay) as? Double
-        self.position = position
-        self.appearance = appearance
-        self.autoCollapseDelay = Self.clampAutoCollapseDelay(autoCollapseDelay ?? storedDelay ?? FloatingPanelMetrics.defaultAutoCollapseDelay)
-
         if refreshLaunchAtLoginStatus {
             refreshLaunchAtLoginStatusState()
         } else {
@@ -176,9 +76,6 @@ final class AppSettings: ObservableObject {
         }
     }
 
-    private static func clampAutoCollapseDelay(_ value: Double) -> Double {
-        min(max(value, minimumAutoCollapseDelay), maximumAutoCollapseDelay)
-    }
 }
 
 struct SettingsView: View {
@@ -191,79 +88,10 @@ struct SettingsView: View {
         )
     }
 
-    private var autoCollapseDelayText: String {
-        String(format: "%.1fs", settings.autoCollapseDelay)
-    }
-
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 SettingsHeroHeader()
-
-                SettingsCard(
-                    icon: "slider.horizontal.3",
-                    title: "Panel",
-                    description: "Appearance, placement, and timing for the floating panel."
-                ) {
-                    VStack(spacing: 0) {
-                        SettingsRow {
-                            VStack(alignment: .leading, spacing: 12) {
-                                SettingsRowHeader(
-                                    title: "Appearance",
-                                    description: "Choose whether the panel follows macOS or stays in a fixed light or dark style."
-                                )
-
-                                Picker("Appearance", selection: $settings.appearance) {
-                                    ForEach(AppAppearance.allCases) { appearance in
-                                        Text(appearance.title).tag(appearance)
-                                    }
-                                }
-                                .pickerStyle(.segmented)
-                            }
-                        }
-
-                        SettingsRowDivider()
-
-                        SettingsRow {
-                            VStack(alignment: .leading, spacing: 12) {
-                                SettingsRowHeader(
-                                    title: "Position",
-                                    description: "Choose whether the panel stays at the top or bottom edge of the current screen."
-                                )
-
-                                Picker("Position", selection: $settings.position) {
-                                    ForEach(FloatingPanelPosition.allCases) { position in
-                                        Text(position.title).tag(position)
-                                    }
-                                }
-                                .pickerStyle(.segmented)
-                            }
-                        }
-
-                        SettingsRowDivider()
-
-                        SettingsRow {
-                            VStack(alignment: .leading, spacing: 12) {
-                                HStack(alignment: .firstTextBaseline, spacing: 12) {
-                                    SettingsRowHeader(
-                                        title: "Auto-collapse timeout",
-                                        description: "Choose how long the panel stays expanded after interaction."
-                                    )
-
-                                    Spacer(minLength: 12)
-
-                                    SettingsValueBadge(text: autoCollapseDelayText)
-                                }
-
-                                Slider(
-                                    value: $settings.autoCollapseDelay,
-                                    in: AppSettings.minimumAutoCollapseDelay...AppSettings.maximumAutoCollapseDelay,
-                                    step: 0.1
-                                )
-                            }
-                        }
-                    }
-                }
 
                 SettingsCard(
                     icon: "desktopcomputer",
@@ -322,9 +150,8 @@ struct SettingsView: View {
             }
             .padding(24)
         }
-        .frame(width: 560, height: 460)
+        .frame(width: 560, height: 360)
         .background(Color(nsColor: .windowBackgroundColor))
-        .preferredColorScheme(settings.preferredColorScheme)
         .onAppear {
             settings.refreshLaunchAtLoginStatusState()
         }
@@ -354,7 +181,7 @@ private struct SettingsHeroHeader: View {
                 Text("Settings")
                     .font(.system(size: 28, weight: .semibold))
 
-                Text("Adjust how Space Marker looks, behaves, and integrates with your Mac.")
+                Text("Adjust how Space Marker looks and integrates with your Mac.")
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
             }
@@ -444,20 +271,6 @@ private struct SettingsRowHeader: View {
     }
 }
 
-private struct SettingsValueBadge: View {
-    let text: String
-
-    var body: some View {
-        Text(text)
-            .font(.system(size: 12, weight: .semibold))
-            .monospacedDigit()
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(.quaternary.opacity(0.55), in: Capsule())
-    }
-}
-
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     static weak var shared: AppDelegate?
@@ -469,7 +282,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var settingsWindowController: SettingsWindowController?
     private var cancellables = Set<AnyCancellable>()
     private var observers: [(center: NotificationCenter, token: NSObjectProtocol)] = []
-    private var manualPanelCenter: CGPoint?
     private var isApplyingManagedWindowFrame = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -492,7 +304,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             settingsWindowController = SettingsWindowController(settings: settings)
         }
 
-        settingsWindowController?.applyAppearance(settings.windowAppearance)
         NSApp.activate(ignoringOtherApps: true)
         settingsWindowController?.showWindow(nil)
         settingsWindowController?.window?.makeKeyAndOrderFront(nil)
@@ -510,7 +321,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
-        panel.level = .statusBar
+        panel.level = .popUpMenu
         panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary]
         panel.hidesOnDeactivate = false
         panel.isMovable = false
@@ -521,12 +332,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.titlebarAppearsTransparent = true
         panel.isReleasedWhenClosed = false
 
-        let rootView = ContentView(monitor: monitor, settings: settings)
+        let rootView = ContentView(monitor: monitor)
             .background(Color.clear)
 
-        panel.appearance = settings.windowAppearance
+        let hostingView = NSHostingView(rootView: rootView)
+        hostingView.wantsLayer = true
+        hostingView.layer?.backgroundColor = NSColor.clear.cgColor
+        hostingView.layer?.isOpaque = false
+        hostingView.layer?.masksToBounds = false
 
-        panel.contentView = NSHostingView(rootView: rootView)
+        panel.contentView = hostingView
         panel.orderFrontRegardless()
 
         window = panel
@@ -534,11 +349,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func bindWindowLayout() {
-        monitor.$panelPresentation
-            .combineLatest(monitor.$spaces, monitor.$errorMessage)
-            .map { [weak self] _, _, _ in
-                self?.panelSize() ?? .zero
-            }
+        monitor.$spaces
+            .combineLatest(monitor.$errorMessage)
+            .map { [weak self] _, _ in self?.panelSize() ?? .zero }
             .removeDuplicates()
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
@@ -548,22 +361,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             .store(in: &cancellables)
 
-        settings.$appearance
-            .removeDuplicates()
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in
-                self?.applyAppearance()
-            }
-            .store(in: &cancellables)
-
-        settings.$position
-            .removeDuplicates()
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in
-                self?.manualPanelCenter = nil
-                self?.updateWindowFrame(animated: true)
-            }
-            .store(in: &cancellables)
     }
 
     private func observeSystemChanges() {
@@ -623,29 +420,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func applyAppearance() {
-        window?.appearance = settings.windowAppearance
-        settingsWindowController?.applyAppearance(settings.windowAppearance)
-    }
-
-    func currentPanelFrame() -> CGRect? {
-        window?.frame
-    }
-
-    func dragCollapsedPanel(from startFrame: CGRect, translation: CGSize) {
-        guard let window else { return }
-
-        let proposedFrame = startFrame.offsetBy(dx: translation.width, dy: translation.height)
-        let resolvedFrame = clampedFrame(for: proposedFrame, preferredScreen: screen(containing: proposedFrame.center) ?? window.screen)
-
-        manualPanelCenter = resolvedFrame.center
-        applyWindowFrame(resolvedFrame)
-    }
-
-    func finishDraggingCollapsedPanel(from startFrame: CGRect, translation: CGSize) {
-        dragCollapsedPanel(from: startFrame, translation: translation)
-    }
-
     private func updateWindowFrame(animated: Bool) {
         guard let window else { return }
 
@@ -660,60 +434,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func panelSize() -> NSSize {
-        switch monitor.effectivePresentation {
-        case .collapsed:
-            return NSSize(
-                width: FloatingPanelMetrics.collapsedWidth,
-                height: FloatingPanelMetrics.collapsedHeight
-            )
-        case .expanded:
-            return NSSize(
-                width: FloatingPanelMetrics.expandedWidth,
-                height: FloatingPanelMetrics.expandedHeight
-            )
-        }
+        NSSize(
+            width: FloatingPanelMetrics.notchWidth + (FloatingPanelMetrics.notchAnimationInset * 2),
+            height: FloatingPanelMetrics.notchHeight
+        )
     }
 
     private func resolvedWindowFrame(for requestedSize: NSSize, fallbackScreen: NSScreen?) -> CGRect {
-        let screen = fallbackScreen ?? screen(containing: manualPanelCenter) ?? anchorScreen() ?? NSScreen.main ?? NSScreen.screens.first
-        let visibleFrame = screen?.visibleFrame ?? CGRect(x: 0, y: 0, width: requestedSize.width, height: requestedSize.height)
+        let screen = anchorScreen() ?? fallbackScreen ?? NSScreen.main ?? NSScreen.screens.first
+        let screenFrame = screen?.frame ?? CGRect(x: 0, y: 0, width: requestedSize.width, height: requestedSize.height)
 
-        let width = min(requestedSize.width, max(220, visibleFrame.width - (FloatingPanelMetrics.horizontalInset * 2)))
-        let height = min(requestedSize.height, max(60, visibleFrame.height - (FloatingPanelMetrics.topInset * 2)))
-        let size = CGSize(width: width, height: height)
-
-        if let manualPanelCenter {
-            let manualOrigin = CGPoint(x: manualPanelCenter.x - (size.width / 2), y: manualPanelCenter.y - (size.height / 2))
-            let manualFrame = CGRect(origin: manualOrigin, size: size)
-            let clamped = clampedFrame(for: manualFrame, preferredScreen: screen)
-            self.manualPanelCenter = clamped.center
-            return clamped
-        }
-
-        let x = visibleFrame.midX - (width / 2)
-        let y: CGFloat
-        switch settings.position {
-        case .top:
-            y = visibleFrame.maxY - FloatingPanelMetrics.topInset - height
-        case .bottom:
-            y = visibleFrame.minY + FloatingPanelMetrics.topInset
-        }
+        let width = min(requestedSize.width, max(220, screenFrame.width - (FloatingPanelMetrics.horizontalInset * 2)))
+        let height = min(requestedSize.height, max(FloatingPanelMetrics.notchHeight, screenFrame.height - (FloatingPanelMetrics.topInset * 2)))
+        let x = screenFrame.midX - (width / 2)
+        let y = screenFrame.maxY - FloatingPanelMetrics.topInset - height
         return CGRect(x: x, y: y, width: width, height: height)
-    }
-
-    private func clampedFrame(for frame: CGRect, preferredScreen: NSScreen?) -> CGRect {
-        let screen = preferredScreen ?? screen(containing: frame.center) ?? anchorScreen() ?? NSScreen.main ?? NSScreen.screens.first
-        let visibleFrame = screen?.visibleFrame ?? frame
-
-        let minX = visibleFrame.minX + FloatingPanelMetrics.horizontalInset
-        let maxX = visibleFrame.maxX - FloatingPanelMetrics.horizontalInset - frame.width
-        let minY = visibleFrame.minY + FloatingPanelMetrics.topInset
-        let maxY = visibleFrame.maxY - FloatingPanelMetrics.topInset - frame.height
-
-        let clampedX = min(max(frame.origin.x, minX), max(minX, maxX))
-        let clampedY = min(max(frame.origin.y, minY), max(minY, maxY))
-
-        return CGRect(x: clampedX, y: clampedY, width: frame.width, height: frame.height)
     }
 
     private func applyWindowFrame(_ frame: CGRect) {
@@ -738,11 +473,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func handleWindowDidMove() {
         guard let window, !isApplyingManagedWindowFrame else { return }
 
-        let clampedFrame = clampedFrame(for: window.frame, preferredScreen: window.screen)
-        manualPanelCenter = clampedFrame.center
+        let resolvedFrame = resolvedWindowFrame(for: panelSize(), fallbackScreen: window.screen)
 
-        if clampedFrame.integral != window.frame.integral {
-            applyWindowFrame(clampedFrame)
+        if resolvedFrame.integral != window.frame.integral {
+            applyWindowFrame(resolvedFrame)
         }
     }
 
@@ -751,16 +485,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return NSScreen.screens.first { NSMouseInRect(mouseLocation, $0.frame, false) }
     }
 
-    private func screen(containing point: CGPoint?) -> NSScreen? {
-        guard let point else { return nil }
-        return NSScreen.screens.first { $0.visibleFrame.insetBy(dx: -1, dy: -1).contains(point) }
-    }
-}
-
-private extension CGRect {
-    var center: CGPoint {
-        CGPoint(x: midX, y: midY)
-    }
 }
 
 final class FloatingPanel: NSPanel {
@@ -778,14 +502,10 @@ final class SettingsWindowController: NSWindowController {
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.isReleasedWhenClosed = false
-        window.setContentSize(NSSize(width: 560, height: 480))
+        window.setContentSize(NSSize(width: 560, height: 380))
         window.center()
         super.init(window: window)
         shouldCascadeWindows = false
-    }
-
-    func applyAppearance(_ appearance: NSAppearance?) {
-        window?.appearance = appearance
     }
 
     @available(*, unavailable)

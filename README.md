@@ -1,30 +1,28 @@
 # yabai-space-marker
 
-`yabai-space-marker` is a macOS floating side panel built with SwiftUI and AppKit. It shows your current `yabai` spaces and lets you jump to any space with one click.
+`yabai-space-marker` is a small macOS notch panel built with SwiftUI and AppKit. It stays attached to the physical top-center notch area of the current screen, floating above the menu bar, and shows the currently focused `yabai` space.
 
-The current UI uses a compact liquid-glass style with expand/collapse behavior, focused-space emphasis, spring-based transitions, and automatic light/dark mode support.
+The UI uses a fixed native notch-style black shell with focused-space emphasis, numeric text transitions, a brief sticky liquid response, and a top-edge cyberpunk gradient line whenever the active space changes.
 
 <video src="https://private-user-images.githubusercontent.com/3580943/593658768-f90eadd8-57f3-4f1e-b409-4a3865676e63.mp4?jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3Nzg5OTcxOTYsIm5iZiI6MTc3ODk5Njg5NiwicGF0aCI6Ii8zNTgwOTQzLzU5MzY1ODc2OC1mOTBlYWRkOC01N2YzLTRmMWUtYjQwOS00YTM4NjU2NzZlNjMubXA0P1gtQW16LUFsZ29yaXRobT1BV1M0LUhNQUMtU0hBMjU2JlgtQW16LUNyZWRlbnRpYWw9QUtJQVZDT0RZTFNBNTNQUUs0WkElMkYyMDI2MDUxNyUyRnVzLWVhc3QtMSUyRnMzJTJGYXdzNF9yZXF1ZXN0JlgtQW16LURhdGU9MjAyNjA1MTdUMDU0ODE2WiZYLUFtei1FeHBpcmVzPTMwMCZYLUFtei1TaWduYXR1cmU9NWEyNTY1YTc3OGEwYmJiNWQ3ZDFhODk4MjlhNmVmNTBlMDAyZmVjOTM5MTBhZDYxODZhMzZmZjEyMTE0ZDk2NSZYLUFtei1TaWduZWRIZWFkZXJzPWhvc3QmcmVzcG9uc2UtY29udGVudC10eXBlPXZpZGVvJTJGbXA0In0.iSAvSeK27oNOmLHjutfsiWrNccVQDHeO518OKs2sBxg" controls width="800"></video>
 
 ## Features
 
-- Floating panel anchored on the left or right side of the screen
-- Shows the current display's spaces
-- Highlights the currently focused space
-- Click any space to focus it immediately
-- Expands on space changes, then auto-collapses
-- Compact liquid-glass UI
-- Supports system / light / dark appearance modes
-- Adaptive refresh scheduling to reduce idle CPU usage while keeping interactions responsive
-- Hover-aware interactive refresh: high-frequency polling is only used while the panel is expanded or actively hovered
+- Fixed physical top-center notch panel on the current screen
+- Shows only the active space number, label or `Space N`, display, and sync/error state
+- Numeric transition for space number changes
+- Sticky liquid stretch and top-edge cyan / magenta gradient line on space changes
+- Compact native notch-style UI
+- Fixed native notch-style appearance with a dedicated settings window for app controls
+- Adaptive refresh scheduling to reduce idle CPU usage while keeping hover/manual updates responsive
 - Command timeout protection for `yabai` queries/focus calls to avoid stuck subprocesses consuming resources
 - Silent background refreshes to avoid unnecessary loading-state redraws during steady-state polling
 - Refresh loop pauses automatically while displays are asleep and resumes on wake
 - `yabai` subprocess timeout waiting uses event-driven completion instead of a spin/sleep polling loop
 - Coalesced window/layout updates for smoother animations and less redundant work
-- Right-click menu with Refresh and Quit actions
-- Footer controls for Settings, Refresh, and Quit
-- Built-in settings page for appearance mode, panel position, auto-collapse timeout, and launch at login
+- Inline total-space count, Settings, and Quit controls on the notch
+- Right-click menu with Settings, Refresh, and Quit actions
+- Built-in settings page for launch at login and quit
 
 ## How it works
 
@@ -33,49 +31,16 @@ The app does not manage spaces directly. It shells out to the `yabai` CLI:
 - Query spaces: `yabai -m query --spaces`
 - Focus a space: `yabai -m space --focus <index>`
 
-The app refreshes space state with adaptive scheduling instead of a constant high-frequency polling loop. It only uses high-frequency refresh while the panel is expanded or the pointer is actively hovering over it, and it adds timeout protection around `yabai` subprocesses so hung commands do not keep consuming resources.
+The app refreshes space state with adaptive scheduling instead of a constant high-frequency polling loop. It uses a faster refresh cadence while the pointer is over the panel and adds timeout protection around `yabai` subprocesses so hung commands do not keep consuming resources.
 
-### Panel position
-
-The panel supports two positions:
-
-- `left` (default)
-- `right`
-
-You can configure it in any of these ways:
-
-```bash
-# launch argument
-open build-signed/Build/Products/Debug/yabai-space-marker.app --args --position right
-
-# or environment variable
-export YABAI_SPACE_MARKER_POSITION=right
-```
-
-You can also persist the setting with macOS defaults:
-
-```bash
-defaults write com.nicocolab.yabai-space-marker position -string right
-```
-
-If no position is configured, the panel stays on the left.
+When macOS reports an active-space change, or when a focus request completes, the app refreshes `yabai` state and updates the notch content to the actual focused space.
 
 ### Settings page
 
 Open the app settings to configure:
 
-- appearance mode (`system` / `light` / `dark`)
-- panel position (`left` / `right`)
-- auto-collapse timeout
 - launch at login
 - quit the app
-
-The panel temporarily expands in these cases:
-
-- On startup
-- On manual refresh
-- When the active macOS space changes
-- When you click a space to focus it
 
 ## Requirements
 
@@ -146,34 +111,27 @@ build-signed/Build/Products/Debug/yabai-space-marker.app
 ### Key files
 
 - `yabai-space-marker/ContentView.swift`
-  - Panel UI
-  - Liquid-glass surface components
-  - Expand/collapse transitions
+  - Notch panel UI
+  - Native notch-style surface components
+  - Space-change sticky liquid stretch and top-edge cyberpunk line animation
   - `YabaiSpacesMonitor` data and interaction logic
 
 - `yabai-space-marker/yabai_space_markerApp.swift`
   - App entry point
   - `NSPanel` creation and layout
-  - Panel positioning and resizing when the screen or active space changes
+  - Fixed physical top-center panel placement when the screen or active space changes
 
 ## Appearance
 
-The panel supports three appearance modes:
+The panel now uses a fixed native notch-style black shell so it stays visually consistent with the hardware cutout. The floating panel remains transparent around the shell and sits above the menu bar at the physical top center of the current display.
 
-- **System**: follows the current macOS appearance automatically
-- **Light mode**: bright frosted-glass surface with subtle blue accents
-- **Dark mode**: darker glass treatment with elevated contrast, softer borders, and tuned glow/shadow balance
-
-You can switch appearance directly from the settings page.
+The separate settings window uses standard macOS materials for launch-at-login and app controls.
 
 ## UI model
 
-The panel has two presentation states:
+The app uses one fixed notch panel. It does not show a space list or offer panel placement controls. The right side of the notch shows the total space count, Settings, and Quit controls; the right-click menu also provides Settings, Refresh, and Quit.
 
-- **Collapsed**: low-obstruction compact state with core status only
-- **Expanded**: full header, space list, footer copy, and controls
-
-The focused space is emphasized with a stronger tone, outline, shadow, and active state treatment.
+If `yabai` is unavailable or returns an error, the same compact notch shows an error state without resizing.
 
 ## Troubleshooting
 
@@ -201,10 +159,3 @@ The project uses Xcode automatic signing by default. On your machine, select you
 - Uses real `yabai` data only; there is no runtime mock path
 - App Sandbox is disabled so the app can execute the external `yabai` binary
 - Runs as an accessory app instead of a normal Dock app
-
-## Possible next improvements
-
-- Richer hover and pointer feedback
-- Configurable auto-collapse duration
-- More precise positioning behavior for multi-display setups
-- A proper preferences screen
