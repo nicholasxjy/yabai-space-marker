@@ -11,13 +11,13 @@ import AppKit
 import Combine
 
 enum FloatingPanelMetrics {
-    static let notchWidth: CGFloat = 330
-    static let notchHeight: CGFloat = 54
-    static let notchAnimationInset: CGFloat = 12
+    static let notchWidth: CGFloat = 276
+    static let notchHeight: CGFloat = 42
+    static let notchAnimationInset: CGFloat = 24
     static let horizontalInset: CGFloat = 16
-    static let topInset: CGFloat = 10
-    static let panelCornerRadius: CGFloat = 24
-    static let controlButtonSize: CGFloat = 26
+    static let topInset: CGFloat = 0
+    static let panelCornerRadius: CGFloat = 18
+    static let controlButtonSize: CGFloat = 16
 
     static let refreshIntervalInteractive: TimeInterval = 2.0
     static let refreshIntervalIdle: TimeInterval = 10.0
@@ -32,7 +32,8 @@ enum FloatingPanelMetrics {
     static let processTerminationGracePeriod: TimeInterval = 0.12
 
     static let panelAnimation = Animation.spring(response: 0.28, dampingFraction: 0.78, blendDuration: 0.05)
-    static let jellyAnimation = Animation.interpolatingSpring(mass: 0.85, stiffness: 360, damping: 18, initialVelocity: 0.35)
+    static let jellyAnimation = Animation.interpolatingSpring(mass: 0.8, stiffness: 310, damping: 13, initialVelocity: 0.55)
+    static let liquidReleaseAnimation = Animation.interpolatingSpring(mass: 0.72, stiffness: 250, damping: 11, initialVelocity: 0.7)
     static let contentAnimation = Animation.easeOut(duration: 0.16)
 }
 
@@ -44,7 +45,7 @@ struct ContentView: View {
     @State private var isPointerHovering = false
     @State private var isSwitchPulsing = false
     @State private var isContentSettled = true
-    @State private var borderFlowPhase = false
+    @State private var isLiquidStretched = false
 
     private var theme: FloatingTheme {
         .resolve(for: colorScheme)
@@ -61,9 +62,9 @@ struct ContentView: View {
             isLoading: monitor.isLoading,
             errorMessage: monitor.errorMessage,
             isSwitchPulsing: isSwitchPulsing,
+            isLiquidStretched: isLiquidStretched,
             isContentSettled: isContentSettled,
             isPointerHovering: isPointerHovering,
-            borderFlowPhase: borderFlowPhase,
             theme: theme,
             openSettings: {
                 openAppSettings()
@@ -72,13 +73,15 @@ struct ContentView: View {
                 NSApplication.shared.terminate(nil)
             }
         )
-        .frame(width: FloatingPanelMetrics.notchWidth, height: FloatingPanelMetrics.notchHeight)
+        .frame(width: FloatingPanelMetrics.notchWidth, height: FloatingPanelMetrics.notchHeight, alignment: .top)
         .padding(.horizontal, FloatingPanelMetrics.notchAnimationInset)
         .frame(
             width: FloatingPanelMetrics.notchWidth + (FloatingPanelMetrics.notchAnimationInset * 2),
-            height: FloatingPanelMetrics.notchHeight
+            height: FloatingPanelMetrics.notchHeight,
+            alignment: .top
         )
-        .contentShape(RoundedRectangle(cornerRadius: FloatingPanelMetrics.panelCornerRadius, style: .continuous))
+        .background(Color.clear)
+        .contentShape(NativeNotchShape(cornerRadius: FloatingPanelMetrics.panelCornerRadius))
         .onHover { isHovering in
             isPointerHovering = isHovering
             monitor.setPointerInside(isHovering)
@@ -110,17 +113,24 @@ struct ContentView: View {
         withAnimation(.easeOut(duration: 0.08)) {
             isContentSettled = false
             isSwitchPulsing = true
-            borderFlowPhase.toggle()
+        }
+        withAnimation(FloatingPanelMetrics.liquidReleaseAnimation) {
+            isLiquidStretched = true
         }
 
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 90_000_000)
+            try? await Task.sleep(nanoseconds: 150_000_000)
+            withAnimation(FloatingPanelMetrics.liquidReleaseAnimation) {
+                isLiquidStretched = false
+            }
+
+            try? await Task.sleep(nanoseconds: 40_000_000)
             withAnimation(FloatingPanelMetrics.jellyAnimation) {
                 isContentSettled = true
             }
 
-            try? await Task.sleep(nanoseconds: 260_000_000)
-            withAnimation(.easeOut(duration: 0.22)) {
+            try? await Task.sleep(nanoseconds: 360_000_000)
+            withAnimation(.easeOut(duration: 0.28)) {
                 isSwitchPulsing = false
             }
         }
@@ -133,9 +143,9 @@ private struct NotchSpacePanel: View {
     let isLoading: Bool
     let errorMessage: String?
     let isSwitchPulsing: Bool
+    let isLiquidStretched: Bool
     let isContentSettled: Bool
     let isPointerHovering: Bool
-    let borderFlowPhase: Bool
     let theme: FloatingTheme
     let openSettings: () -> Void
     let quit: () -> Void
@@ -181,20 +191,20 @@ private struct NotchSpacePanel: View {
     }
 
     var body: some View {
-        HStack(spacing: 11) {
+        HStack(spacing: 8) {
             spaceBadge
 
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 5) {
                     statusDot
 
                     Text(statusText)
-                        .font(.system(size: 7, weight: .bold, design: .monospaced))
-                        .foregroundStyle(hasError ? theme.errorAccent : theme.accentEnd)
+                        .font(.system(size: 6, weight: .bold, design: .monospaced))
+                        .foregroundStyle(hasError ? theme.errorAccent : theme.secondaryText)
                 }
 
                 Text(title)
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .font(.system(size: 11.5, weight: .semibold, design: .rounded))
                     .foregroundStyle(hasError ? theme.errorText : theme.primaryText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
@@ -202,7 +212,7 @@ private struct NotchSpacePanel: View {
                     .transition(.opacity)
 
                 Text(subtitle)
-                    .font(.system(size: 9, weight: .medium, design: .rounded))
+                    .font(.system(size: 7.5, weight: .medium, design: .rounded))
                     .foregroundStyle(theme.secondaryText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.78)
@@ -213,25 +223,34 @@ private struct NotchSpacePanel: View {
 
             rightControls
         }
-        .padding(.leading, 13)
-        .padding(.trailing, 22)
+        .padding(.leading, 9)
+        .padding(.trailing, 12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .background(panelBackground)
-        .clipShape(RoundedRectangle(cornerRadius: FloatingPanelMetrics.panelCornerRadius, style: .continuous))
+        .clipShape(NativeNotchShape(cornerRadius: FloatingPanelMetrics.panelCornerRadius))
         .overlay(panelOverlay)
-        .scaleEffect(x: isSwitchPulsing ? 1.045 : (isPointerHovering ? 1.015 : 1.0), y: isSwitchPulsing ? 0.965 : 1.0)
-        .shadow(color: theme.panelShadow.opacity(theme.panelShadowOpacity), radius: 13, x: 0, y: 8)
+        .scaleEffect(
+            x: isLiquidStretched ? 1.055 : (isSwitchPulsing ? 0.986 : (isPointerHovering ? 1.006 : 1.0)),
+            y: isLiquidStretched ? 0.91 : (isSwitchPulsing ? 1.035 : 1.0),
+            anchor: .top
+        )
+        .shadow(color: theme.panelShadow.opacity(theme.panelShadowOpacity), radius: 10, x: 0, y: 5)
     }
 
     private var spaceBadge: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
                 .fill(
                     LinearGradient(
-                        colors: [
-                            accent.opacity(hasError ? 0.82 : 0.95),
-                            (hasError ? theme.errorAccent : theme.accentEnd).opacity(0.62)
-                        ],
+                        colors: hasError
+                            ? [
+                                theme.errorAccent.opacity(0.78),
+                                theme.errorAccent.opacity(0.30)
+                            ]
+                            : [
+                                theme.cyberCyan.opacity(isSwitchPulsing ? 0.92 : 0.72),
+                                theme.cyberMagenta.opacity(isSwitchPulsing ? 0.78 : 0.54)
+                            ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
@@ -239,36 +258,36 @@ private struct NotchSpacePanel: View {
 
             if let focusedSpace {
                 Text("\(focusedSpace.index)")
-                    .font(.system(size: 21, weight: .bold, design: .rounded))
+                    .font(.system(size: 17, weight: .heavy, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(theme.focusText)
                     .contentTransition(.numericText())
             } else {
                 Image(systemName: hasError ? "exclamationmark" : "rectangle.3.group.fill")
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.system(size: 11, weight: .bold))
                     .foregroundStyle(theme.focusText)
             }
         }
-        .frame(width: 39, height: 38)
+        .frame(width: 28, height: 28)
         .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(theme.highlightBase.opacity(0.34), lineWidth: 0.8)
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .stroke(theme.highlightBase.opacity(isSwitchPulsing ? 0.42 : 0.22), lineWidth: 0.8)
         )
-        .shadow(color: accent.opacity(isSwitchPulsing ? 0.42 : 0.22), radius: isSwitchPulsing ? 12 : 7, x: 0, y: 0)
+        .shadow(color: accent.opacity(isSwitchPulsing ? 0.32 : 0.16), radius: isSwitchPulsing ? 8 : 4, x: 0, y: 0)
     }
 
     private var statusDot: some View {
         Circle()
             .fill(accent)
-            .frame(width: 5, height: 5)
+            .frame(width: 4, height: 4)
             .shadow(color: accent.opacity(theme.statusDotGlowOpacity), radius: 5, x: 0, y: 0)
     }
 
     private var rightControls: some View {
-        HStack(spacing: 11) {
+        HStack(spacing: 8) {
             totalSpacesBadge
 
-            VStack(spacing: 4) {
+            VStack(spacing: 2) {
                 Button(action: openSettings) {
                     NotchIconButton(systemImage: "gearshape.fill", foreground: theme.primaryText, tint: theme.neutralTint, theme: theme)
                 }
@@ -286,13 +305,18 @@ private struct NotchSpacePanel: View {
 
     private var totalSpacesBadge: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            Capsule(style: .continuous)
                 .fill(
                     LinearGradient(
-                        colors: [
-                            theme.neutralTint.opacity(0.92),
-                            theme.accentGlow.opacity(0.42)
-                        ],
+                        colors: hasError
+                            ? [
+                                theme.errorAccent.opacity(0.22),
+                                Color.white.opacity(0.07)
+                            ]
+                            : [
+                                theme.highlightBase.opacity(isSwitchPulsing ? 0.18 : 0.13),
+                                theme.cyberYellow.opacity(isSwitchPulsing ? 0.16 : 0.10)
+                            ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
@@ -301,104 +325,139 @@ private struct NotchSpacePanel: View {
             if isLoading {
                 ProgressView()
                     .controlSize(.small)
-                    .scaleEffect(0.46)
-                    .tint(theme.accentEnd)
-                    .frame(width: 14, height: 14)
+                    .scaleEffect(0.40)
+                    .tint(theme.primaryText)
+                    .frame(width: 12, height: 12)
             } else {
-                Text("\(totalSpaces)")
-                    .font(.system(size: 21, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(hasError ? theme.errorText : theme.primaryText)
-                    .contentTransition(.numericText())
+                HStack(spacing: 2) {
+                    Text("\(focusedSpace?.index ?? 0)")
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(hasError ? theme.errorText : theme.primaryText)
+                        .contentTransition(.numericText())
+
+                    Text("/")
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .foregroundStyle(hasError ? theme.errorAccent : theme.cyberYellow.opacity(0.82))
+
+                    Text("\(totalSpaces)")
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(hasError ? theme.errorText : theme.primaryText)
+                        .contentTransition(.numericText())
+                }
+                .offset(x: -0.5)
             }
         }
-        .frame(width: 39, height: 38)
+        .frame(width: 36, height: 24)
         .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(theme.highlightBase.opacity(0.26), lineWidth: 0.8)
+            Capsule(style: .continuous)
+                .stroke(
+                    hasError
+                        ? theme.errorAccent.opacity(0.24)
+                        : theme.cyberYellow.opacity(isSwitchPulsing ? 0.34 : 0.22),
+                    lineWidth: 0.8
+                )
         )
-        .overlay(alignment: .bottom) {
-            Text("ALL")
-                .font(.system(size: 5, weight: .bold, design: .monospaced))
-                .foregroundStyle(theme.secondaryText)
-                .padding(.bottom, 3)
-        }
-        .shadow(color: theme.accentGlow.opacity(isSwitchPulsing ? 0.28 : 0.14), radius: isSwitchPulsing ? 10 : 6, x: 0, y: 0)
     }
 
     private var panelBackground: some View {
-        LiquidGlassSurface(
-            cornerRadius: FloatingPanelMetrics.panelCornerRadius,
-            tint: accent,
-            tintStrength: hasError ? 0.14 : (isSwitchPulsing ? 0.22 : 0.11),
-            fillOpacity: isPointerHovering ? 0.24 : 0.2,
-            highlightOpacity: isSwitchPulsing ? 0.9 : 0.74,
-            theme: theme
-        )
-    }
-
-    private var cyberCyan: Color {
-        Color(red: 0.00, green: 0.92, blue: 1.00)
-    }
-
-    private var cyberPink: Color {
-        Color(red: 1.00, green: 0.18, blue: 0.82)
-    }
-
-    private var cyberYellow: Color {
-        Color(red: 1.00, green: 0.96, blue: 0.18)
-    }
-
-    private var borderGradient: LinearGradient {
-        LinearGradient(
-            colors: borderFlowPhase
-                ? [
-                    cyberPink.opacity(isSwitchPulsing ? 0.92 : 0.34),
-                    cyberYellow.opacity(isSwitchPulsing ? 0.86 : 0.22),
-                    cyberCyan.opacity(isSwitchPulsing ? 0.96 : 0.36),
-                    accent.opacity(isSwitchPulsing ? 0.66 : 0.20),
-                    cyberPink.opacity(isSwitchPulsing ? 0.90 : 0.30)
-                ]
-                : [
-                    cyberCyan.opacity(isSwitchPulsing ? 0.96 : 0.36),
-                    accent.opacity(isSwitchPulsing ? 0.66 : 0.20),
-                    cyberPink.opacity(isSwitchPulsing ? 0.92 : 0.34),
-                    cyberYellow.opacity(isSwitchPulsing ? 0.86 : 0.22),
-                    cyberCyan.opacity(isSwitchPulsing ? 0.92 : 0.30)
-                ],
-            startPoint: borderFlowPhase ? .topTrailing : .topLeading,
-            endPoint: borderFlowPhase ? .bottomLeading : .bottomTrailing
-        )
+        NativeNotchShape(cornerRadius: FloatingPanelMetrics.panelCornerRadius)
+            .fill(theme.panelBase)
     }
 
     private var panelOverlay: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: FloatingPanelMetrics.panelCornerRadius, style: .continuous)
-                .stroke(borderGradient, lineWidth: isSwitchPulsing ? 4.0 : 1.4)
-                .blur(radius: isSwitchPulsing ? 3.2 : 1.0)
-                .opacity(isSwitchPulsing ? 0.96 : (isPointerHovering ? 0.38 : 0.22))
+            NativeNotchShape(cornerRadius: FloatingPanelMetrics.panelCornerRadius)
+                .stroke(theme.highlightBase.opacity(isPointerHovering ? 0.16 : 0.08), lineWidth: 0.8)
 
-            RoundedRectangle(cornerRadius: FloatingPanelMetrics.panelCornerRadius, style: .continuous)
-                .stroke(borderGradient, lineWidth: isSwitchPulsing ? 1.8 : 0.9)
-                .shadow(color: cyberCyan.opacity(isSwitchPulsing ? 0.46 : 0.10), radius: isSwitchPulsing ? 8 : 2, x: 0, y: 0)
-                .shadow(color: cyberPink.opacity(isSwitchPulsing ? 0.40 : 0.08), radius: isSwitchPulsing ? 10 : 2, x: 0, y: 0)
+            TopFlowLine(
+                isActive: isSwitchPulsing,
+                theme: theme
+            )
 
             VStack(spacing: 0) {
                 Spacer()
 
                 LinearGradient(
                     colors: [
-                        Color.black.opacity(theme.bottomShadowOpacity),
-                        Color.black.opacity(0.0)
+                        theme.highlightBase.opacity(isSwitchPulsing ? 0.18 : (isPointerHovering ? 0.11 : 0.06)),
+                        theme.highlightBase.opacity(0.0)
                     ],
-                    startPoint: .bottom,
-                    endPoint: .top
+                    startPoint: .top,
+                    endPoint: .bottom
                 )
-                .frame(height: 12)
+                .frame(height: 1)
+                .padding(.horizontal, 18)
+                .padding(.bottom, 1)
             }
-            .clipShape(RoundedRectangle(cornerRadius: FloatingPanelMetrics.panelCornerRadius, style: .continuous))
+            .clipShape(NativeNotchShape(cornerRadius: FloatingPanelMetrics.panelCornerRadius))
             .allowsHitTesting(false)
         }
+    }
+}
+
+private struct TopFlowLine: View {
+    let isActive: Bool
+    let theme: FloatingTheme
+
+    var body: some View {
+        Group {
+            if isActive {
+                TimelineView(.animation) { timeline in
+                    let phase = timeline.date.timeIntervalSinceReferenceDate
+                    let travel = sin(phase * 7.2)
+
+                    HStack {
+                        Capsule(style: .continuous)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        theme.cyberCyan.opacity(0.0),
+                                        theme.cyberCyan.opacity(0.95),
+                                        theme.cyberMagenta.opacity(0.92),
+                                        theme.cyberYellow.opacity(0.68),
+                                        theme.cyberCyan.opacity(0.0)
+                                    ],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .frame(width: 96, height: 1.6)
+                            .offset(x: travel * 88)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .padding(.top, 0.8)
+                    .clipShape(NativeNotchShape(cornerRadius: FloatingPanelMetrics.panelCornerRadius))
+                }
+            }
+        }
+        .animation(.easeOut(duration: 0.24), value: isActive)
+        .allowsHitTesting(false)
+    }
+}
+
+private struct NativeNotchShape: Shape {
+    let cornerRadius: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let radius = min(cornerRadius, rect.width / 2, rect.height)
+
+        path.move(to: rect.origin)
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - radius))
+        path.addQuadCurve(
+            to: CGPoint(x: rect.maxX - radius, y: rect.maxY),
+            control: CGPoint(x: rect.maxX, y: rect.maxY)
+        )
+        path.addLine(to: CGPoint(x: rect.minX + radius, y: rect.maxY))
+        path.addQuadCurve(
+            to: CGPoint(x: rect.minX, y: rect.maxY - radius),
+            control: CGPoint(x: rect.minX, y: rect.maxY)
+        )
+        path.closeSubpath()
+        return path
     }
 }
 
@@ -410,155 +469,87 @@ private struct NotchIconButton: View {
 
     var body: some View {
         Image(systemName: systemImage)
-            .font(.system(size: 8.5, weight: .bold))
+            .font(.system(size: 7.5, weight: .semibold))
             .foregroundStyle(foreground)
-            .frame(width: 18, height: 17)
+            .frame(width: FloatingPanelMetrics.controlButtonSize, height: FloatingPanelMetrics.controlButtonSize)
             .background(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                tint.opacity(0.34),
-                                tint.opacity(0.20)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                Circle()
+                    .fill(tint.opacity(0.12))
             )
-            .overlay(alignment: .top) {
-                RoundedRectangle(cornerRadius: 1, style: .continuous)
-                    .fill(theme.highlightBase.opacity(0.30))
-                    .frame(width: 9, height: 1)
-                    .padding(.top, 3)
-            }
+            .overlay(
+                Circle()
+                    .stroke(theme.highlightBase.opacity(0.10), lineWidth: 0.6)
+            )
     }
 }
 
 private struct FloatingTheme: Equatable {
-    let id: Int
     let accentStart: Color
-    let accentEnd: Color
     let accentGlow: Color
+    let cyberCyan: Color
+    let cyberMagenta: Color
+    let cyberYellow: Color
 
     let neutralTint: Color
     let panelBase: Color
     let primaryText: Color
     let secondaryText: Color
 
-    let lineStrong: Color
     let focusText: Color
 
     let errorAccent: Color
     let errorText: Color
 
-    let materialTail: Color
     let highlightBase: Color
     let panelShadow: Color
     let previewBackground: Color
 
     let statusDotGlowOpacity: Double
     let panelShadowOpacity: Double
-    let bottomShadowOpacity: Double
 
     static func resolve(for colorScheme: ColorScheme) -> FloatingTheme {
         colorScheme == .dark ? .dark : .light
     }
 
     static let light = FloatingTheme(
-        id: 0,
-        accentStart: Color(red: 0.10, green: 0.86, blue: 1.00),
-        accentEnd: Color(red: 0.48, green: 0.43, blue: 1.00),
-        accentGlow: Color(red: 0.76, green: 0.98, blue: 1.00),
-        neutralTint: Color(red: 0.86, green: 0.92, blue: 1.00),
-        panelBase: Color(red: 0.86, green: 0.90, blue: 0.99),
-        primaryText: Color(red: 0.05, green: 0.07, blue: 0.12),
-        secondaryText: Color(red: 0.25, green: 0.33, blue: 0.46),
-        lineStrong: Color.white.opacity(0.96),
+        accentStart: Color(red: 0.28, green: 0.92, blue: 0.62),
+        accentGlow: Color.white,
+        cyberCyan: Color(red: 0.00, green: 0.92, blue: 1.00),
+        cyberMagenta: Color(red: 1.00, green: 0.10, blue: 0.74),
+        cyberYellow: Color(red: 1.00, green: 0.92, blue: 0.25),
+        neutralTint: Color.white,
+        panelBase: Color(red: 0.005, green: 0.005, blue: 0.006),
+        primaryText: Color.white.opacity(0.94),
+        secondaryText: Color.white.opacity(0.52),
         focusText: Color.white.opacity(0.97),
         errorAccent: Color(red: 0.97, green: 0.31, blue: 0.36),
-        errorText: Color(red: 0.52, green: 0.11, blue: 0.14),
-        materialTail: Color(red: 0.93, green: 0.90, blue: 1.00),
+        errorText: Color(red: 1.00, green: 0.80, blue: 0.82),
         highlightBase: .white,
         panelShadow: .black,
-        previewBackground: Color(red: 0.90, green: 0.94, blue: 1.00),
-        statusDotGlowOpacity: 0.52,
-        panelShadowOpacity: 0.10,
-        bottomShadowOpacity: 0.10
+        previewBackground: Color(red: 0.84, green: 0.87, blue: 0.92),
+        statusDotGlowOpacity: 0.36,
+        panelShadowOpacity: 0.32
     )
 
     static let dark = FloatingTheme(
-        id: 1,
-        accentStart: Color(red: 0.00, green: 0.88, blue: 1.00),
-        accentEnd: Color(red: 0.42, green: 0.28, blue: 1.00),
-        accentGlow: Color(red: 0.38, green: 0.97, blue: 1.00),
-        neutralTint: Color(red: 0.08, green: 0.10, blue: 0.17),
-        panelBase: Color(red: 0.03, green: 0.05, blue: 0.12),
-        primaryText: Color(red: 0.92, green: 0.97, blue: 1.00),
-        secondaryText: Color(red: 0.61, green: 0.74, blue: 0.92),
-        lineStrong: Color.white.opacity(0.28),
+        accentStart: Color(red: 0.28, green: 0.92, blue: 0.62),
+        accentGlow: Color.white,
+        cyberCyan: Color(red: 0.00, green: 0.92, blue: 1.00),
+        cyberMagenta: Color(red: 1.00, green: 0.10, blue: 0.74),
+        cyberYellow: Color(red: 1.00, green: 0.92, blue: 0.25),
+        neutralTint: Color.white,
+        panelBase: Color(red: 0.005, green: 0.005, blue: 0.006),
+        primaryText: Color.white.opacity(0.94),
+        secondaryText: Color.white.opacity(0.52),
         focusText: Color.white.opacity(0.98),
         errorAccent: Color(red: 1.00, green: 0.35, blue: 0.38),
         errorText: Color(red: 1.00, green: 0.83, blue: 0.86),
-        materialTail: Color(red: 0.10, green: 0.02, blue: 0.18),
         highlightBase: .white,
         panelShadow: .black,
         previewBackground: Color(red: 0.02, green: 0.04, blue: 0.09),
-        statusDotGlowOpacity: 0.72,
-        panelShadowOpacity: 0.30,
-        bottomShadowOpacity: 0.24
+        statusDotGlowOpacity: 0.36,
+        panelShadowOpacity: 0.34
     )
-}
-
-private struct LiquidGlassSurface: View {
-    let cornerRadius: CGFloat
-    let tint: Color
-    let tintStrength: CGFloat
-    let fillOpacity: CGFloat
-    let highlightOpacity: CGFloat
-    let theme: FloatingTheme
-
-    var body: some View {
-        ZStack(alignment: .top) {
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(.ultraThinMaterial)
-
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            theme.panelBase.opacity(fillOpacity * 0.95),
-                            tint.opacity(tintStrength * 0.45),
-                            theme.materialTail.opacity(fillOpacity * 0.24)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-
-            Capsule(style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [theme.highlightBase.opacity(highlightOpacity), theme.highlightBase.opacity(0.02)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .frame(height: max(12, cornerRadius * 0.72))
-                .padding(.horizontal, 8)
-                .padding(.top, 5)
-
-            Rectangle()
-                .fill(tint.opacity(tintStrength * 0.85))
-                .frame(height: 1.1)
-                .padding(.horizontal, 18)
-                .padding(.top, 8)
-        }
-        .overlay(
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .stroke(theme.lineStrong.opacity(0.7), lineWidth: 0.8)
-        )
-    }
 }
 
 struct YabaiSpace: Codable, Identifiable, Equatable {

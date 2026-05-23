@@ -1,18 +1,18 @@
 # yabai-space-marker
 
-`yabai-space-marker` is a small macOS notch panel built with SwiftUI and AppKit. It stays attached to the top center of the current screen and shows the currently focused `yabai` space.
+`yabai-space-marker` is a small macOS notch panel built with SwiftUI and AppKit. It stays attached to the physical top-center notch area of the current screen, floating above the menu bar, and shows the currently focused `yabai` space.
 
-The UI uses a fixed liquid-glass panel with focused-space emphasis, numeric text transitions, a brief accent glow, and a jelly-style scale response whenever the active space changes.
+The UI uses a fixed native notch-style black shell with focused-space emphasis, numeric text transitions, a brief sticky liquid response, and a top-edge cyberpunk gradient line whenever the active space changes.
 
 <video src="https://private-user-images.githubusercontent.com/3580943/593658768-f90eadd8-57f3-4f1e-b409-4a3865676e63.mp4?jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3Nzg5OTcxOTYsIm5iZiI6MTc3ODk5Njg5NiwicGF0aCI6Ii8zNTgwOTQzLzU5MzY1ODc2OC1mOTBlYWRkOC01N2YzLTRmMWUtYjQwOS00YTM4NjU2NzZlNjMubXA0P1gtQW16LUFsZ29yaXRobT1BV1M0LUhNQUMtU0hBMjU2JlgtQW16LUNyZWRlbnRpYWw9QUtJQVZDT0RZTFNBNTNQUUs0WkElMkYyMDI2MDUxNyUyRnVzLWVhc3QtMSUyRnMzJTJGYXdzNF9yZXF1ZXN0JlgtQW16LURhdGU9MjAyNjA1MTdUMDU0ODE2WiZYLUFtei1FeHBpcmVzPTMwMCZYLUFtei1TaWduYXR1cmU9NWEyNTY1YTc3OGEwYmJiNWQ3ZDFhODk4MjlhNmVmNTBlMDAyZmVjOTM5MTBhZDYxODZhMzZmZjEyMTE0ZDk2NSZYLUFtei1TaWduZWRIZWFkZXJzPWhvc3QmcmVzcG9uc2UtY29udGVudC10eXBlPXZpZGVvJTJGbXA0In0.iSAvSeK27oNOmLHjutfsiWrNccVQDHeO518OKs2sBxg" controls width="800"></video>
 
 ## Features
 
-- Fixed top-center notch panel on the current screen
+- Fixed physical top-center notch panel on the current screen
 - Shows only the active space number, label or `Space N`, display, and sync/error state
 - Numeric transition for space number changes
-- Accent glow pulse and subtle jelly animation on space changes
-- Compact liquid-glass UI
+- Sticky liquid stretch and top-edge cyan / magenta gradient line on space changes
+- Compact native notch-style UI
 - Supports system / light / dark appearance modes
 - Adaptive refresh scheduling to reduce idle CPU usage while keeping hover/manual updates responsive
 - Command timeout protection for `yabai` queries/focus calls to avoid stuck subprocesses consuming resources
@@ -113,22 +113,22 @@ build-signed/Build/Products/Debug/yabai-space-marker.app
 
 - `yabai-space-marker/ContentView.swift`
   - Notch panel UI
-  - Liquid-glass surface components
-  - Space-change glow and jelly animation
+  - Native notch-style surface components
+  - Space-change sticky liquid stretch and top-edge cyberpunk line animation
   - `YabaiSpacesMonitor` data and interaction logic
 
 - `yabai-space-marker/yabai_space_markerApp.swift`
   - App entry point
   - `NSPanel` creation and layout
-  - Fixed top-center panel placement when the screen or active space changes
+  - Fixed physical top-center panel placement when the screen or active space changes
 
 ## Appearance
 
 The panel supports three appearance modes:
 
 - **System**: follows the current macOS appearance automatically
-- **Light mode**: bright frosted-glass surface with subtle blue accents
-- **Dark mode**: darker glass treatment with elevated contrast, softer borders, and tuned glow/shadow balance
+- **Light mode**: keeps the native black notch surface while adapting the settings window
+- **Dark mode**: keeps the native black notch surface with elevated settings-window contrast
 
 You can switch appearance directly from the settings page.
 

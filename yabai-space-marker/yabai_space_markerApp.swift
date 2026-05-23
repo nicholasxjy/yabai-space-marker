@@ -418,7 +418,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
-        panel.level = .statusBar
+        panel.level = .popUpMenu
         panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary]
         panel.hidesOnDeactivate = false
         panel.isMovable = false
@@ -434,7 +434,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         panel.appearance = settings.windowAppearance
 
-        panel.contentView = NSHostingView(rootView: rootView)
+        let hostingView = NSHostingView(rootView: rootView)
+        hostingView.wantsLayer = true
+        hostingView.layer?.backgroundColor = NSColor.clear.cgColor
+        hostingView.layer?.isOpaque = false
+        hostingView.layer?.masksToBounds = false
+
+        panel.contentView = hostingView
         panel.orderFrontRegardless()
 
         window = panel
@@ -547,12 +553,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func resolvedWindowFrame(for requestedSize: NSSize, fallbackScreen: NSScreen?) -> CGRect {
         let screen = anchorScreen() ?? fallbackScreen ?? NSScreen.main ?? NSScreen.screens.first
-        let visibleFrame = screen?.visibleFrame ?? CGRect(x: 0, y: 0, width: requestedSize.width, height: requestedSize.height)
+        let screenFrame = screen?.frame ?? CGRect(x: 0, y: 0, width: requestedSize.width, height: requestedSize.height)
 
-        let width = min(requestedSize.width, max(220, visibleFrame.width - (FloatingPanelMetrics.horizontalInset * 2)))
-        let height = min(requestedSize.height, max(FloatingPanelMetrics.notchHeight, visibleFrame.height - (FloatingPanelMetrics.topInset * 2)))
-        let x = visibleFrame.midX - (width / 2)
-        let y = visibleFrame.maxY - FloatingPanelMetrics.topInset - height
+        let width = min(requestedSize.width, max(220, screenFrame.width - (FloatingPanelMetrics.horizontalInset * 2)))
+        let height = min(requestedSize.height, max(FloatingPanelMetrics.notchHeight, screenFrame.height - (FloatingPanelMetrics.topInset * 2)))
+        let x = screenFrame.midX - (width / 2)
+        let y = screenFrame.maxY - FloatingPanelMetrics.topInset - height
         return CGRect(x: x, y: y, width: width, height: height)
     }
 
