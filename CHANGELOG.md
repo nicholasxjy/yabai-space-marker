@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.1.0 - 2026-05-23
+
+### Features
+- Redesign the floating panel with a richer notch-style layout that shows the focused space title, display number, total spaces, and sync state at a glance
+- Add a panel position setting so the marker can sit in the top notch area or at the bottom center of the current screen
+
+### Fixes
+- Keep the panel aligned to the active display and update its frame more reliably when placement changes
+- Pause refreshes while displays sleep and resume cleanly on wake without expanding the panel on error states
+
+### Documentation
+- Refresh the README and demo image to match the redesigned floating panel and updated settings
+
 ## 1.0.0 - 2026-05-23
 
 ### Features
